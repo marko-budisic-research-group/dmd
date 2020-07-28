@@ -1,7 +1,7 @@
 % this assumes that DEMO_20_06_synthetic_field.m has been run
 assert(exist('DEMO_20_06_synthetic_field_COMPLETE','var') && ...
     DEMO_20_06_synthetic_field_COMPLETE, ...
-    "Run DEMO_20_06_synthetic_field first")
+    "Run synthetic_field first")
 
 
 figure(50); clf;
