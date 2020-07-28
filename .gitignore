@@ -6,6 +6,15 @@
 ## MATLAB
 *.mat
 
+## OUTPUT FILES
+*.mp4
+*.avi
+*.png
+*.pdf
+*.gif
+*.jpg
+*.jpeg
+
 
 ## Core latex/pdflatex auxiliary files:
 *.aux
