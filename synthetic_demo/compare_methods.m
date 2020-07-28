@@ -13,8 +13,8 @@ Data_SV = svd(DataAssembled);
 cmap = [winter(8);flipud(autumn(8)) ];
 cmap_diff = [summer;flipud(autumn)];
 
-METH1_NAME = "ROM TDMD";
-METH2_NAME = "ROM DMD EXACT";
+METH1_NAME = "PDMD";
+METH2_NAME = "TDMD";
 Ns = [2:20, 20:5:80];
 
 COMPARISON_NAME = genvarname(METH1_NAME) + "_VS_" + genvarname(METH2_NAME);
@@ -24,6 +24,9 @@ filename = "comp_" + COMPARISON_NAME + datestr(now,'yymmddHHMMSS');
 ERROR_METH1 = nan(1,numel(Ns));
 ERROR_METH2 = nan(1,numel(Ns));
 ERROR_METH1_METH2 = nan(1,numel(Ns));
+
+METH1_fitstep = [1];
+METH2_fitstep = [1,150];
 
 
 v = VideoWriter(filename,'MPEG-4');
@@ -38,11 +41,11 @@ NOISELEVEL = norm(NoiseComponent,'fro');
 for k = 1:numel(Ns)
 
     %% METHOD1 - computation of modes and reconstruction
-    out_METH1 = dmd(DataAssembled, dt, Ns(k), 'debias', Ns(k) );
+    out_METH1 = dmd(DataAssembled, dt, Ns(k), 'rom_type', 'tlsq','step',METH1_fitstep );
     [ROM_METH1,out_METH1] = reduce_order(out_METH1.Phi, out_METH1.omega, out_METH1.b,transpose(t), (1:Ns(k))  );
 
     %% METHOD2 - computation of modes and reconstruction
-    out_METH2 = dmd(DataAssembled, dt, Ns(k) );
+    out_METH2 = dmd(DataAssembled, dt, Ns(k), 'rom_type', 'tlsq','step',METH2_fitstep );
     [ROM_METH2,out_METH2] = reduce_order(out_METH2.Phi, out_METH2.omega, out_METH2.b,transpose(t), (1:Ns(k))   );
 
     % if reconstruction does not take into account conjugate modes, skip
@@ -63,13 +66,6 @@ for k = 1:numel(Ns)
     METH2_to_REF = REFERENCE - ROM_METH2;
     METH1_to_METH2 = ROM_METH1 - ROM_METH2;
     
-    if k == 1
-    clim_rec = max(abs(REFERENCE),[],'all') * [-1,1];
-    clim_err = max( ...
-        max(abs(METH1_to_REF),[],'all'),...
-        max(abs(METH2_to_REF),[],'all')...        
-         )* [-1,1];
-    end
 
     %% Normalize summary errors
     Normalization = norm(REFERENCE,'fro');
@@ -79,34 +75,45 @@ for k = 1:numel(Ns)
 
 
     %% VISUALIZATION
+    balance_color = @(hh,ff)caxis(hh, max(abs(ff),[],'all')*[-1,1]);
+
 
     h_true = subplot(3,3,1);
     pcolor(t, SpaceDomain, REFERENCE ); shading flat;
     colormap(cmap);
     colorbar;
     title("Reference: " + REFERENCE_NAME);
-    caxis(h_true, clim_rec);
+    balance_color(h_true, REFERENCE);
 
     h_meth1 = subplot(3,3,2);
     pcolor(t, SpaceDomain, ROM_METH1 ); shading flat;    
     colormap(cmap);
     colorbar;
     title({"METHOD1: " + METH1_NAME + " Model rank = " + out_METH1.model_rank  ;"Reconstruction rank = " + out_METH1.data_rank});
-    caxis(h_meth1, clim_rec);
+    balance_color(h_meth1, REFERENCE);
+    for k = 1:numel(METH1_fitstep)
+    hx1(k) = xline( (METH1_fitstep(k)-1)*dt, 'k:','Fit here');
+    hx1(k).LineWidth = 3;
+    end
 
+    
     h_error1 = subplot(3,3,3);
     h_DIFF = pcolor(t, SpaceDomain, METH1_to_REF ); shading flat;
     title({"METHOD1: " + METH1_NAME,"Difference to REF"})
     colorbar;
     colormap(gca, cmap_diff);
-    caxis(h_error1, clim_err);
-
+    balance_color(h_error1, METH1_to_REF);
+    
     h_meth2 = subplot(3,3,5);
     pcolor(t, SpaceDomain, ROM_METH2 ); shading flat;
     colorbar;
     title({"METHOD2: " + METH2_NAME + " Model rank = " + out_METH2.model_rank  ;"Reconstruction rank = " + out_METH2.data_rank});
     colormap(gca,cmap);
-    caxis(h_meth2, clim_rec);
+    balance_color(h_meth2, REFERENCE);
+    for k = 1:numel(METH2_fitstep)
+    hx2(k) = xline( (METH2_fitstep(k)-1)*dt, 'k:','Fit here');
+    hx2(k).LineWidth = 3;
+    end
 
 
     h_error2 = subplot(3,3,6);
@@ -114,16 +121,16 @@ for k = 1:numel(Ns)
     title({"METHOD2: " + METH2_NAME,"Difference to REF"})
     colormap(gca, cmap_diff);
     colorbar;
-    caxis(h_error2, clim_err);
-
+    balance_color(h_error2, METH2_to_REF);
+    
     
 
-    subplot(3,3,8);
+    h_error3 = subplot(3,3,8);
     pcolor(t, SpaceDomain, METH1_to_METH2 ); shading flat;
     title("Difference between methods")
     colormap(gca, cmap_diff );
     colorbar;
-    caxis([-1,1]*max(abs(METH1_to_METH2),[], 'all'));
+    balance_color(h_error3, METH1_to_METH2);
 
     h_comp = subplot(3,3,9);
 
@@ -132,7 +139,7 @@ for k = 1:numel(Ns)
     plot(Ns(1:k), ERROR_METH1_METH2(1:k),'k-+', 'DisplayName','Between METH');
     hold off;
     xlim([0, max(Ns)]);
-    ylim([0, max(1, NoiseMagnitudeGain*1.5)]);
+    %ylim([0, max(1, NoiseMagnitudeGain*1.5)]);
     grid minor;
     set(h_comp,'yscale','log');
 
