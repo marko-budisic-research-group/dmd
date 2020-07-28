@@ -1,7 +1,7 @@
-% this assumes that DEMO_20_06_synthetic_field.m has been run
-assert(exist('DEMO_20_06_synthetic_field_COMPLETE','var') && ...
-    DEMO_20_06_synthetic_field_COMPLETE, ...
-    "Run synthetic_field first")
+% this assumes that synthetic_field.m has been run
+assert(exist('synthetic_field_COMPLETE','var') && ...
+    synthetic_field_COMPLETE, ...
+    "Run synthetic_field.m first")
 
 
 figure(50); clf;
@@ -12,8 +12,8 @@ Data_SV = svd(DataAssembled);
 cmap = [winter(8);flipud(autumn(8)) ];
 cmap_diff = [summer;flipud(autumn)];
 
-METH1_NAME = "TDMD_IC";
-METH2_NAME = "TDMD_SPREAD";
+METH1_NAME = "TDMD";
+METH2_NAME = "TDMD";
 Ns = [2:20, 20:5:80];
 
 COMPARISON_NAME = genvarname(METH1_NAME) + "_VS_" + genvarname(METH2_NAME);

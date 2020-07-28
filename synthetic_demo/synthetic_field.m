@@ -138,7 +138,7 @@ NoiseComponent = NoiseMagnitudeGain*norm(DataWoNoise,'fro')...
 
 DataAssembled = DataWoNoise + NoiseComponent;
 
-DEMO_20_06_synthetic_field_COMPLETE = true;
+synthetic_field_COMPLETE = true;
 
 try
     assert(any(x0 ~= 0));
