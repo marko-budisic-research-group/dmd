@@ -5,6 +5,7 @@
 
 ## MATLAB
 *.mat
+*.asv
 
 ## OUTPUT FILES
 *.mp4
