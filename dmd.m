@@ -24,6 +24,13 @@ function out = dmd( DataMatrix, dt, r, options )
 %         VALUE = true - remove the mean before computing DMD (Hirsh 2019)
 %         VALUE = false - no preprocessing {default}
 %
+%    out = dmd( DataMatrix, dt, r, 'step', VALUE)
+%         VALUE is a row-vector of snapshot indices at which optimization is
+%         performed to determine b coefficients in the expansion. 
+%         If VALUE = -1, all snapshots are used.
+% 
+%        
+%
 % Outputs:
 % out.meanL2norm - time-average of L2 norm of mode
 % out.b - contribution of the mode to 0th timestep
@@ -41,6 +48,10 @@ arguments
     options.removemean (1,1) logical = false
     options.sortbyb (1,1) logical = false
     options.step (1,:) double {mustBeInteger,mustBeFinite} = 1
+end
+
+if options.step == -1
+    options.step = 1:size(DataMatrix,2);
 end
 
 assert( r<= min(size(DataMatrix)), ...
@@ -127,9 +138,16 @@ end
 LHS = permute(LHS, [1,3,2]);
 LHS = reshape(LHS,[], size(Phi,2) );
 
+% basically 
+% LHS = [ Phi * D^0 ; Phi * D^1 ; ...]
+
+
 % RHS: corresponding snapshots
 RHS = DataMatrix(:, options.step);
 RHS = reshape(RHS,[], 1);
+
+% basically
+% RHS = [Datamatrix(:,1); Datamatrix(:,2);, ...]
 
 % not always equivalent to LHS\RHS
 % see: https://www.mathworks.com/help/matlab/ref/lsqminnorm.html#mw_e9cfa6e3-ccc3-4830-802c-df496b9e452b
