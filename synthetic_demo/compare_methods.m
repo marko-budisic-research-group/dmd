@@ -13,8 +13,11 @@ cmap = [winter(8);flipud(autumn(8)) ];
 cmap_diff = [summer;flipud(autumn)];
 
 METH1_NAME = "TDMD";
-METH2_NAME = "TDMD";
-Ns = [2:20, 20:5:80];
+METH2_NAME = "TDMD Trunc Input";
+Ns = [2:2:20, 20:5:50];
+Ns = repmat(30, 1, 20);
+idx = floor( linspace(10, size(DataAssembled,2), numel(Ns)) );
+Ns = min(idx-1, Ns);
 
 COMPARISON_NAME = genvarname(METH1_NAME) + "_VS_" + genvarname(METH2_NAME);
 filename = "comp_" + COMPARISON_NAME + datestr(now,'yymmddHHMMSS');
@@ -23,9 +26,6 @@ filename = "comp_" + COMPARISON_NAME + datestr(now,'yymmddHHMMSS');
 ERROR_METH1 = nan(1,numel(Ns));
 ERROR_METH2 = nan(1,numel(Ns));
 ERROR_METH1_METH2 = nan(1,numel(Ns));
-
-METH1_fitstep = [1];
-METH2_fitstep = [1,150,250];
 
 
 v = VideoWriter(filename,'MPEG-4');
@@ -39,12 +39,18 @@ NOISELEVEL = norm(NoiseComponent,'fro');
 
 for k = 1:numel(Ns)
     
+    
+    METH1_fitstep = [1,idx(k)];
+    METH2_fitstep = [1,idx(k)];
+    
+    
     %% METHOD1 - computation of modes and reconstruction
-    out_METH1 = dmd(DataAssembled, dt, Ns(k), 'rom_type', 'tlsq','step',METH1_fitstep );
+    out_METH1 = dmd(DataAssembled, dt, 95, 'rom_type', 'tlsq','step',METH1_fitstep );
+    
     [ROM_METH1,out_METH1] = reduce_order(out_METH1.Phi, out_METH1.omega, out_METH1.b,transpose(t), (1:Ns(k))  );
     
     %% METHOD2 - computation of modes and reconstruction
-    out_METH2 = dmd(DataAssembled, dt, Ns(k), 'rom_type', 'tlsq','step',METH2_fitstep );
+    out_METH2 = dmd(DataAssembled(:,1:idx(k)), dt, Ns(k), 'rom_type', 'tlsq','step',METH2_fitstep );
     [ROM_METH2,out_METH2] = reduce_order(out_METH2.Phi, out_METH2.omega, out_METH2.b,transpose(t), (1:Ns(k))   );
     
     % if reconstruction does not take into account conjugate modes, skip
@@ -135,11 +141,11 @@ for k = 1:numel(Ns)
     
     h_comp = subplot(3,3,9); cla;
     
-    h_nerr1 = plot(Ns, ERROR_METH1, 'r-o','DisplayName',"METH1 to REF"); hold on;
-    h_nerr2 = plot(Ns, ERROR_METH2, 'b-x','DisplayName',"METH2 to REF" );
-    h_nerr3 = plot(Ns, ERROR_METH1_METH2,'k-+', 'DisplayName','Between METH');
+    h_nerr1 = plot(idx, ERROR_METH1, 'r-o','DisplayName',"METH1 to REF"); hold on;
+    h_nerr2 = plot(idx, ERROR_METH2, 'b-x','DisplayName',"METH2 to REF" );
+    h_nerr3 = plot(idx, ERROR_METH1_METH2,'k-+', 'DisplayName','Between METH');
     hold off;
-    xlim([0, max(Ns)]);
+    xlim([0, max(idx)]);
     grid minor;
     set(h_comp,'yscale','log');
     
@@ -148,14 +154,20 @@ for k = 1:numel(Ns)
     hy.Annotation.LegendInformation.IconDisplayStyle = 'off'; % skip in legend;
     
     title("Normalized Frob. norm error");
+    xlabel("Truncation index");
     
     
     subplot(3,3,4);cla;
     scatter( real(E), imag(E), 100+10*randn(size(E)), 'ko', 'DisplayName','JAC' ); hold on;
-    axis([-0.5,0.5, -7,7]);
-    scatter( real(out_METH1.omega), imag(out_METH1.omega), 100, 'rx', 'DisplayName',"METH1" );
-    scatter( real(out_METH2.omega), imag(out_METH2.omega), 100, 'b+', 'DisplayName',"METH2" ); hold off;
-    legend('fontsize',6,'location','southwest');
+    ylim([-7,7]);
+    xlims = xlim;
+    xlims(1) = -log(2)/( max(TimeDomain)/10 );
+    xlim(xlims);
+    
+    sizing = @(x)50*normalize(abs(x));
+    scatter( real(out_METH1.omega), imag(out_METH1.omega), max( 100+sizing(out_METH1.b), 10), 'rx', 'DisplayName',"METH1" );
+    scatter( real(out_METH2.omega), imag(out_METH2.omega), max( 100+sizing(out_METH2.b), 10), 'b+', 'DisplayName',"METH2" ); hold off;
+    legend('fontsize',6,'location','best');
     grid minor;
     
     title("Three spectra - zoomed in")
@@ -163,17 +175,19 @@ for k = 1:numel(Ns)
     ylabel("Im(\omega)")
     
     subplot(3,3,7); cla;
-    copyobj(get(subplot(3,3,4),'Children'),...
-        subplot(3,3,7))     % copy spectrum plot verbatim
-    grid minor;
-    axis auto; % zoom out;
-    title("Three spectra - zoomed out")
-    xlabel("Re(\omega)")
-    ylabel("Im(\omega)")
+    h_spec_m1 = visualize_DMD_spectrum(out_METH1.omega, out_METH1.b, max(TimeDomain), "METH1"); hold on;
+    h_spec_m2 = visualize_DMD_spectrum(out_METH2.omega, out_METH2.b, max(TimeDomain), "METH2"); hold off;
+    [h_spec_m1.Color] = deal('r');
+    [h_spec_m1.MarkerSize] = deal(8);
     
-sgtitle({"Reduced-order models; TimeScale = " + TimeScale + " Duration = "+max(TimeDomain); ...
-    IncludedComponents; ExcludedComponents;
-    },'horizontalAlignment', 'left' );
+    [h_spec_m2.Color] = deal('b');
+    [h_spec_m2.MarkerSize] = deal(8);
+    legend('fontsize',6,'location','best');
+    
+    
+    sgtitle({"Reduced-order models; TimeScale = " + TimeScale + " Duration = "+max(TimeDomain); ...
+        IncludedComponents; ExcludedComponents;
+        },'horizontalAlignment', 'left' );
     
     
     frame = getframe(h);
@@ -182,3 +196,5 @@ sgtitle({"Reduced-order models; TimeScale = " + TimeScale + " Duration = "+max(T
 end
 
 close(v);
+export_fig(filename, '-png',h);
+

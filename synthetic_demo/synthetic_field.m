@@ -40,14 +40,14 @@ component_names = strings(12,1); % names of components
 % # Oscillating component with weak growth/decay (2 states)
 
 p.Comp1.DoublingTime = -TimeScale*1.56;
-p.Comp1.Period = TimeScale/5;
-x0(1:2) = [1;0.5];
+p.Comp1.Period = TimeScale/10;
+x0(1:2) = [1;0.5]/5;
 component_names(1:2) = "Weak growth/decay osc.";
 
 % # Slowly decaying monotonic (non-oscillating) component (1 state)
 
 p.Comp2.DoublingTime = -TimeScale;
-x0(3) = 1;
+x0(3) = 1/5;
 component_names(3) = "Monotonic";
 
 % # Oscillating component with linear (non-normal) growth (4 states)
@@ -68,15 +68,15 @@ component_names(8:9) = "Non-sin. osc";
 
 % # Oscillating component undergoing a Hopf bifurcation (2 states)
 
-p.hopf = 0.5;
+p.hopf = 0.25;
 p.hopf_period = TimeScale/6.28;
-x0(10:11) = 0.1;
+x0(10:11) = 0.025;
 component_names(10:11)= "Limit cycle (Hopf)";
 
 % # Background mode undergoing a pitchfork bifurcation (1 state)
 
 p.pitchfork = 0.25;
-x0(12) = 0.1;
+x0(12) = 0;
 component_names(12) = "Bkg. pfork";
 
 % NoiseMagnitude
