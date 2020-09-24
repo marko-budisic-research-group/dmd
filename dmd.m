@@ -20,9 +20,8 @@ function out = dmd( DataMatrix, dt, r, options )
 %         VALUE = false - sort DMD modes by average L2 norm of time
 %                          coefficient {default}
 %
-%    out = dmd( DataMatrix, dt, r, 'removemean', VALUE)
-%         VALUE = true - remove the mean before computing DMD (Hirsh 2019)
-%         VALUE = false - no preprocessing {default}
+%    out = dmd( DataMatrix, dt, r, 'removefrequencies', VALUE)
+%         VALUE = vector of continuous-time complex frequencies to remove
 %
 %    out = dmd( DataMatrix, dt, r, 'step', VALUE)
 %         VALUE is a row-vector of snapshot indices at which optimization is
@@ -45,7 +44,7 @@ arguments
     dt (1,1) double {mustBePositive, mustBeFinite}
     r (1,1) double {mustBePositive,mustBeInteger,mustBeFinite}
     options.rom_type {mustBeMember(options.rom_type,{'lsq','tlsq'})} = 'lsq'
-    options.removemean (1,1) logical = false
+    options.removefrequencies (1,:) double = []
     options.sortbyb (1,1) logical = false
     options.step (1,:) double {mustBeInteger,mustBeFinite} = 1
 end
@@ -63,20 +62,32 @@ Nsnapshots = size(DataMatrix,2);
 X1=DataMatrix(:,1:end-1); % likely a very slow part of the code
 X2=DataMatrix(:,2:end);
 
-if options.removemean % if de-meaning requested
 
-    X1m = mean(X1, 2); % compute actual mean vectors
-    X2m = mean(X2, 2);
-
-else % just make "mean vectors" equal to zero
-    X1m = zeros(size(X1, 1), 1 );
-    X2m = zeros(size(X2, 1), 1 );
-
+if ~isempty(options.removefrequencies)
+    disp('Removing predetermined frequencies')
+    
+    % row vector of continuous frequencies
+    OmegaR = reshape( options.removefrequencies, 1, [] );
+    
+    % discrete frequencies row vector
+    LR = exp( OmegaR * dt ); 
+    
+    % Vandermonde
+    VR = LR .^ transpose( 0:( size(DataMatrix,2)-1 ) );
+    
+    % truncated vandermonde
+    VR_o = VR(2:end,:);
+    
+    % projectors
+    PI = pinv(transpose(VR))*transpose(VR);
+    PI_o = pinv(transpose(VR_o))*transpose(VR_o);
+    
+    
+    X1 = X1 - X1*PI_o;
+    X2 = X2 - X2*PI_o;
+        
 end
 
-% subtract means
-X1 = X1 - X1m;
-X2 = X2 - X2m;
 
 % total-DMD Hemati debias
 switch(options.rom_type)
