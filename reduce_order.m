@@ -9,7 +9,7 @@ function [ROM,out] = reduce_order( Phi, omega, b, t, idx )
 %     omega (:,1) double {mustBeNumeric}  % list of continuous-time frequencies
 %     b (:,1) double {mustBeNumeric}      % list of combination coefficients
 %     t (1,:) double {mustBeReal}         % time vector on which modes are evaluated
-%     idx (:,1) = true(size(b))           % list of modes to be used (default: all)
+%     idx (:,1) = true(size(b))           % logical index vector (or list of indices) of modes to be included (default: all)
 %
 %
 %
@@ -25,7 +25,7 @@ arguments
     omega (:,1) double {mustBeNumeric}  % list of continuous-time frequencies
     b (:,1) double {mustBeNumeric}      % list of combination coefficients
     t (1,:) double {mustBeReal}         % time vector on which modes are evaluated
-    idx (:,1) = true(size(b))           % list of modes to be used (default: all)
+    idx (:,1) = true(size(b))           % logical index of modes to be used (default: all)
 end
 
 %% select only requested modes
