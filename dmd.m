@@ -20,13 +20,22 @@ function out = dmd( DataMatrix, dt, r, options )
 %         VALUE = false - sort DMD modes by average L2 norm of time
 %                          coefficient {default}
 %
-%    out = dmd( DataMatrix, dt, r, 'removefrequencies', VALUE)
-%         VALUE = vector of continuous-time complex frequencies to remove
-%
 %    out = dmd( DataMatrix, dt, r, 'step', VALUE)
 %         VALUE is a row-vector of snapshot indices at which optimization is
 %         performed to determine b coefficients in the expansion. 
 %         If VALUE = -1, all snapshots are used.
+%
+%    out = dmd( DataMatrix, dt, r, 'removefrequencies', VALUE)
+%         VALUE = vector of continuous-time complex-valued frequencies to
+%                 remove from data by harmonic averaging before DMD is
+%                 applied.
+%
+%                 If the passed vector is non-empty, output structure will
+%                 contain vectors out.AvgOmega, out.AvgModes, etc. that
+%                 correspond to modes that were computed by harmonic
+%                 averaging. They are normalized and scaled in the same way
+%                 as DMD modes, so they can be used in the same manner.
+%
 % 
 %        
 %
@@ -58,6 +67,7 @@ assert( r<= min(size(DataMatrix)), ...
 
 %% Preprocessing
 Nsnapshots = size(DataMatrix,2);
+T = (Nsnapshots-1)*dt;
 
 X1=DataMatrix(:,1:end-1); % likely a very slow part of the code
 X2=DataMatrix(:,2:end);
@@ -70,22 +80,36 @@ if ~isempty(options.removefrequencies)
     OmegaR = reshape( options.removefrequencies, 1, [] );
     
     % discrete frequencies row vector
-    LR = exp( OmegaR * dt ); 
+    LambdaR = exp( OmegaR * dt ); 
     
-    % Vandermonde
-    VR = LR .^ transpose( 0:( size(DataMatrix,2)-1 ) );
+    % Vandermonde    
+    Vandermonde = LambdaR .^ transpose( 0:( Nsnapshots-1 ) );
     
-    % truncated vandermonde
-    VR_o = VR(2:end,:);
+        
+    % truncated vandermonde (for dealing with X1 and X2)
+    VR_o = Vandermonde(2:end,:);
     
     % projectors
-    PI = pinv(transpose(VR))*transpose(VR);
+    PI = pinv(transpose(Vandermonde))*transpose(Vandermonde);
     PI_o = pinv(transpose(VR_o))*transpose(VR_o);
     
-    
-    X1 = X1 - X1*PI_o;
-    X2 = X2 - X2*PI_o;
         
+    X1 = X1 - X1*PI_o;
+    X2 = X2 - X2*PI_o;    
+    
+    HarmonicAverage1 = DataMatrix*pinv(transpose(Vandermonde));
+    HarmonicAverage2 = DataMatrix*conj(Vandermonde)/Nsnapshots;
+    
+    norm(HarmonicAverage2)
+    
+    norm(HarmonicAverage1 - HarmonicAverage2)/norm(HarmonicAverage1)
+    
+    [out.AvgPhi, out.AvgB] = normalizeModes(HarmonicAverage2);
+    
+    out.AvgOmega = options.removefrequencies(:);
+    out.AvgLambda = LambdaR(:);
+    out.AvgMeanL2norm = abs(out.AvgB) .* sqrt( (exp(2*real(out.AvgOmega)*T)-1)./(2*real(out.AvgOmega)*T) );
+
 end
 
 
@@ -122,8 +146,8 @@ assert( length(Atilde) == r, "Requested model rank not achieved")
 [W, D] = eig(Atilde);
 Phi = X2*Vr*inv(Sr)*W;
 
-% normalize each column by its 2-norm
-Phi = Phi ./ vecnorm( Phi );
+% normalize each column by its 2-norm (division by a constant)
+[Phi,~] = normalizeModes( Phi ); % see appendix
 
 %% Compute continuous-time eigenvalues
 lambda = diag(D);
@@ -133,8 +157,9 @@ omega = log(lambda)/dt;
 % by L2-fit to a sequence of snapshots
 
 disp("Computing b by L2 fit at snapshots " + ...
-    mat2str(options.step) + ", time = " + ...
-    mat2str( (options.step-1)*dt ) );
+    num2str(options.step, "%d") );
+disp( "time = " + ...
+    num2str( (options.step-1)*dt, "%.2f ") );
 
 % LHS: modes advanced to required steps
 LHS = zeros([size(Phi), numel(options.step)]);
@@ -166,8 +191,15 @@ b = lsqminnorm(LHS, RHS);
 
 
 %% Compute mean L2 contribution of each mode
-T = (Nsnapshots-1)*dt;
 meanL2norm = abs(b) .* sqrt( (exp(2*real(omega)*T)-1)./(2*real(omega)*T) );
+
+% when real(omega) is zero, the formula above doesn't work as magnitude of
+% the mode is constant - so we compute it manually
+idx_small = abs(real(omega)*T) < 1e-12;
+meanL2norm(idx_small) = abs(b(idx_small));
+
+% catch any remaining errors
+assert(all( ~isnan(meanL2norm) ), "Problems: L2 norm computation failed");
 
 
 %% Sorting
@@ -183,4 +215,13 @@ out.Phi = Phi(:,idx);
 out.omega = omega(idx);
 out.lambda = lambda(idx);
 out.model_rank = length(Atilde);
+end
+
+function [NormMatrix, Coefficients ] = normalizeModes( ModeMatrix )
+
+NormalizationPhase = median( angle(ModeMatrix), 1 );
+
+
+Coefficients = vecnorm( ModeMatrix ) .* exp( 1j * NormalizationPhase );
+NormMatrix = ModeMatrix ./ Coefficients;
 end
