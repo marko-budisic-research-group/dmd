@@ -84,8 +84,7 @@ if ~isempty(options.removefrequencies)
     
     % Vandermonde    
     Vandermonde = LambdaR .^ transpose( 0:( Nsnapshots-1 ) );
-    
-        
+            
     % truncated vandermonde (for dealing with X1 and X2)
     VR_o = Vandermonde(2:end,:);
     
@@ -97,14 +96,13 @@ if ~isempty(options.removefrequencies)
     X1 = X1 - X1*PI_o;
     X2 = X2 - X2*PI_o;    
     
-    HarmonicAverage1 = DataMatrix*pinv(transpose(Vandermonde));
-    HarmonicAverage2 = DataMatrix*conj(Vandermonde)/Nsnapshots;
+    % the following two calculations are in-principle equivalent, but not
+    % exactly when number of time steps is finite
+    HarmonicAverage = DataMatrix*pinv(transpose(Vandermonde));
+    %HarmonicAverage = DataMatrix*conj(Vandermonde)/Nsnapshots;
     
-    norm(HarmonicAverage2)
-    
-    norm(HarmonicAverage1 - HarmonicAverage2)/norm(HarmonicAverage1)
-    
-    [out.AvgPhi, out.AvgB] = normalizeModes(HarmonicAverage2);
+        
+    [out.AvgPhi, out.AvgB] = normalizeModes(HarmonicAverage);
     
     out.AvgOmega = options.removefrequencies(:);
     out.AvgLambda = LambdaR(:);
