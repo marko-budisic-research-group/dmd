@@ -1,23 +1,50 @@
-% demo code.
+%% CREATE SYNTHETIC DATASET
 
-%% create the dataset
+% create the dataset
 linear_combination
 
-%% add the noise
+% add the noise
 noise = randn(size(X0));
-noise = noise / norm(noise(:,1));
+noise = norm(X0(:,1))* noise / norm(noise(:,1));
 X = X0 + 0.01*noise;
 
 
-%% PCT of modes to keep in SVD step (precise number not important)
-pct = 0.45;
-svd_rank_truncation = floor( rank(X)*pct/2 )*2;
+%% COMPUTE DMD
 
-%% select a random subset of steps to fit (so we don't have to use all)
+% percentage of modes to keep in SVD step (precise number not important)
+pct = 0.45;
+svd_rank_truncation = floor( rank(X)*pct );
+
+% select a random subset of steps to fit (so we don't have to use all)
 fitsteps = unique([1, randi([1,size(X,2)], 1,10), size(X,2)] );
 
-%% compute DMD without and with removal of frequencies
-out = dmd(X, dt, svd_rank_truncation, 'rom_type', 'tlsq', 'step', fitsteps);
+% compute DMD without and with removal of frequencies
+out = dmd(X, dt, ...
+    svd_rank_truncation, ... % dimension of reduced DMD matrix
+    'rom_type', 'tlsq', ...  % standard or total DMD
+    'sortbyb',false,... % sort modes by |b| or mean L2 (default:false)
+    'step', fitsteps ... % snapshots over which to optimize value of b
+    );
+
+%% COMPUTE REDUCED ORDER MODEL OF DATA (optional)
+% reconstruct using all DMD modes (to convince ourselves that full DMD is roughly correct)
+ROM_N = 8;
+
+DataMatrixROM = reduce_order( out.Phi, out.omega, out.b, t, 1:ROM_N);
+
+if norm(imag(DataMatrixROM)) > 0.1
+    disp('Make sure to use both complex modes')
+    ROM_N = ROM_N-1;
+    DataMatrixROM = reduce_order( out.Phi, out.omega, out.b, t, 1:ROM_N);
+end
+
+[U,S,V] = svd(X,'econ');
+S(ROM_N+1:end,:) = 0;
+S(:, ROM_N+1:end) = 0;
+DataMatrixPOD = U*S*V';
+
+
+%% VISUALIZATION %%
 
 
 figure(1);
@@ -67,16 +94,6 @@ end
 %% SHOW ROM MADE WITH PURE DMD
 colorrange = [-1,1]*max(abs(X),[],'all');
 
-%% reconstruct using all DMD modes (to convince ourselves that full DMD is roughly correct)
-ROM_N = 10;
-
-DataMatrixROM = reduce_order( out.Phi, out.omega, out.b, t, 1:ROM_N);
-
-if norm(imag(DataMatrixROM)) > 0.1
-    disp('Make sure to use both complex modes')
-    ROM_N = ROM_N-1;
-    DataMatrixROM = reduce_order( out.Phi, out.omega, out.b, t, 1:ROM_N);
-end
 
 figure(3); 
 tiledlayout('flow'); 
@@ -89,7 +106,16 @@ title("Input data w/o noise")
 
 
 nexttile; pcolor(real( DataMatrixROM ) ); colorbar; shading interp; caxis(colorrange);
-title("ROM");
+title("DMD ROM");
 
-nexttile; pcolor( ( real( X0 ) - real( DataMatrixROM ) ) ); shading interp; colorbar;caxis(colorrange);
-title("Difference between data w/o noise and ROM of order " + ROM_N );
+nexttile; pcolor( ( real( X0 ) - real( DataMatrixROM ) ) ); shading interp; colorbar;%caxis(colorrange);
+title("Difference between data w/o noise and DMD ROM of order " + ROM_N );
+
+nexttile; pcolor(real( DataMatrixPOD ) ); colorbar; shading interp; caxis(colorrange);
+title("POD ROM");
+
+nexttile; pcolor( ( real( X0 ) - real( DataMatrixPOD ) ) ); shading interp; colorbar;%caxis(colorrange);
+title("Difference between data w/o noise and POD ROM of order " + ROM_N );
+
+nexttile; pcolor( ( real( DataMatrixROM ) - real( DataMatrixPOD ) ) ); shading interp; colorbar;%caxis(colorrange);
+title("Difference between DMD and POD ROM of order " + ROM_N );
