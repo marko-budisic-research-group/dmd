@@ -22,7 +22,7 @@ function out = dmd( DataMatrix, dt, r, options )
 %
 %    out = dmd( DataMatrix, dt, r, 'step', VALUE)
 %         VALUE is a row-vector of snapshot indices at which optimization is
-%         performed to determine b coefficients in the expansion. 
+%         performed to determine b coefficients in the expansion.
 %         If VALUE = -1, all snapshots are used.
 %
 %    out = dmd( DataMatrix, dt, r, 'removefrequencies', VALUE)
@@ -36,8 +36,8 @@ function out = dmd( DataMatrix, dt, r, options )
 %                 averaging. They are normalized and scaled in the same way
 %                 as DMD modes, so they can be used in the same manner.
 %
-% 
-%        
+%
+%
 %
 % Outputs:
 % out.meanL2norm - time-average of L2 norm of mode
@@ -75,35 +75,35 @@ X2=DataMatrix(:,2:end);
 
 if ~isempty(options.removefrequencies)
     disp('Removing predetermined frequencies')
-    
+
     % row vector of continuous frequencies
     OmegaR = reshape( options.removefrequencies, 1, [] );
-    
+
     % discrete frequencies row vector
-    LambdaR = exp( OmegaR * dt ); 
-    
-    % Vandermonde    
+    LambdaR = exp( OmegaR * dt );
+
+    % Vandermonde
     Vandermonde = LambdaR .^ transpose( 0:( Nsnapshots-1 ) );
-            
+
     % truncated vandermonde (for dealing with X1 and X2)
     VR_o = Vandermonde(2:end,:);
-    
+
     % projectors
     PI = pinv(transpose(Vandermonde))*transpose(Vandermonde);
     PI_o = pinv(transpose(VR_o))*transpose(VR_o);
-    
-        
+
+
     X1 = X1 - X1*PI_o;
-    X2 = X2 - X2*PI_o;    
-    
+    X2 = X2 - X2*PI_o;
+
     % the following two calculations are in-principle equivalent, but not
     % exactly when number of time steps is finite
     HarmonicAverage = DataMatrix*pinv(transpose(Vandermonde));
     %HarmonicAverage = DataMatrix*conj(Vandermonde)/Nsnapshots;
-    
-        
+
+
     [out.AvgPhi, out.AvgB] = normalizeModes(HarmonicAverage);
-    
+
     out.AvgOmega = options.removefrequencies(:);
     out.AvgLambda = LambdaR(:);
     out.AvgMeanL2norm = abs(out.AvgB) .* sqrt( (exp(2*real(out.AvgOmega)*T)-1)./(2*real(out.AvgOmega)*T) );
@@ -134,7 +134,10 @@ Sr = S(1:r, 1:r);
 Vr = V(:,1:r);
 
 % Build Atilde
-Atilde = transpose(Ur)*X2*Vr*inv(Sr);
+singular_values = diag(Sr);
+
+Atilde = transpose(Ur)*X2*Vr*diag(1./singular_values);
+
 assert( all(~isnan(Atilde),'all') && all(~isinf(Atilde),'all'), ...
     "Atilde shouldn't contain NaN or Inf - check invertibility of Sr")
 
@@ -142,7 +145,7 @@ assert( length(Atilde) == r, "Requested model rank not achieved")
 
 % Compute DMD Modes
 [W, D] = eig(Atilde);
-Phi = X2*Vr*inv(Sr)*W;
+Phi = X2*Vr*diag(1./singular_values)*W;
 
 % normalize each column by its 2-norm (division by a constant)
 [Phi,~] = normalizeModes( Phi ); % see appendix
@@ -164,7 +167,7 @@ LHS = zeros([size(Phi), numel(options.step)]);
 
 % advance mode vectors by steps and set them into layers of LHS tensor
 for k = 1:numel(options.step)
-    LHS(:,:,k) = Phi*D^(options.step(k)-1); 
+    LHS(:,:,k) = Phi*D^(options.step(k)-1);
 end
 
 % reshape LHS into a 2D matrix so that the layers are stacked on top of
@@ -172,7 +175,7 @@ end
 LHS = permute(LHS, [1,3,2]);
 LHS = reshape(LHS,[], size(Phi,2) );
 
-% basically 
+% basically
 % LHS = [ Phi * D^0 ; Phi * D^1 ; ...]
 
 
