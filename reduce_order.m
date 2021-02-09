@@ -3,7 +3,7 @@ function [ROM,out] = reduce_order( Phi, omega, b, t, idx )
 % values indexed by idx.
 %
 % Usage:
-% ROM = reduce_order( Phi, omega, b, idx )
+% ROM = reduce_order( Phi, omega, b, t, idx )
 %
 %     Phi (:,:) double {mustBeNumeric}    % modal matrix
 %     omega (:,1) double {mustBeNumeric}  % list of continuous-time frequencies
