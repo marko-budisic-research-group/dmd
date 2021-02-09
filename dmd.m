@@ -106,7 +106,12 @@ if ~isempty(options.removefrequencies)
 
     out.AvgOmega = options.removefrequencies(:);
     out.AvgLambda = LambdaR(:);
-    out.AvgMeanL2norm = abs(out.AvgB) .* sqrt( (exp(2*real(out.AvgOmega)*T)-1)./(2*real(out.AvgOmega)*T) );
+    
+    meanL2 = abs(out.AvgB) .* sqrt( (exp(2*real(out.AvgOmega)*T)-1)./(2*real(out.AvgOmega)*T) );
+    meanL2(isnan(meanL2)) = abs(out.AvgB(isnan(meanL2)));    
+    
+    out.AvgMeanL2norm = meanL2;
+    
 
 end
 
@@ -193,6 +198,7 @@ b = lsqminnorm(LHS, RHS);
 
 %% Compute mean L2 contribution of each mode
 meanL2norm = abs(b) .* sqrt( (exp(2*real(omega)*T)-1)./(2*real(omega)*T) );
+meanL2norm(isnan(meanL2norm)) = abs(b(isnan(meanL2norm))); % L2 norm of non-exponentials
 
 % when real(omega) is zero, the formula above doesn't work as magnitude of
 % the mode is constant - so we compute it manually
