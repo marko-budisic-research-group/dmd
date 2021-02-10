@@ -28,7 +28,7 @@
 TimeScale = 10;
 dt = 1e-1; % timestep
 dx = 1e-3; % spatial step
-TimeDomain = 0:dt:3*TimeScale;
+TimeDomain = 0:dt:10*TimeScale;
 SpaceDomain = -1:dx:1;
 
 NoiseMagnitudeGain = .5; % 50% of noise
@@ -39,21 +39,28 @@ component_names = strings(12,1); % names of components
 
 % # Oscillating component with weak growth/decay (2 states)
 
-p.Comp1.DoublingTime = -TimeScale*1.56;
-p.Comp1.Period = TimeScale/10;
-x0(1:2) = [1;0.5]/5;
+frequency = @(DT, P)complex( log(2)/DT, 2*pi/P );
+
+p.Comp1.DoublingTime = -100*TimeScale;
+p.Comp1.Period = TimeScale;
+p.Comp1.Frequency = frequency( p.Comp1.DoublingTime, p.Comp1.Period);
+x0(1:2) = [1;0.5];
 component_names(1:2) = "Weak growth/decay osc.";
 
 % # Slowly decaying monotonic (non-oscillating) component (1 state)
 
 p.Comp2.DoublingTime = -TimeScale;
-x0(3) = 1/5;
+p.Comp2.Frequency = frequency( p.Comp1.DoublingTime, inf);
+
+x0(3) = 1;
 component_names(3) = "Monotonic";
 
 % # Oscillating component with linear (non-normal) growth (4 states)
 
 p.Comp3.DoublingTime = inf;
 p.Comp3.Period = TimeScale/7;
+p.Comp3.Frequency = frequency( p.Comp3.DoublingTime, p.Comp3.Period);
+
 x0(4:5) = 0;
 component_names(4:5) = "Resonating/Periodic";
 x0(6:7) = 0;
@@ -63,14 +70,18 @@ component_names(6:7) = "Res. driver (periodic)";
 
 p.Comp4.DoublingTime = inf;
 p.Comp4.Period = TimeScale/1.8;
+p.Comp4.Frequency = frequency( p.Comp4.DoublingTime, p.Comp4.Period);
+
 x0(8:9) = 0;
 component_names(8:9) = "Non-sin. osc";
 
 % # Oscillating component undergoing a Hopf bifurcation (2 states)
 
 p.hopf = 0.25;
-p.hopf_period = TimeScale/6.28;
-x0(10:11) = 0.025;
+p.hopf_period = TimeScale/2;
+p.hopf_frequency = frequency( inf, p.hopf_period);
+
+x0(10:11) = 0.01;
 component_names(10:11)= "Limit cycle (Hopf)";
 
 % # Background mode undergoing a pitchfork bifurcation (1 state)
@@ -198,7 +209,7 @@ for k = 1:12
     title("C " + k);
 end
 title(h_coeff, "Time evolution of combination coefficients");
-
+return;
 %% Visualize individual components
 cmap = [winter(8);flipud(autumn(8)) ];
 
@@ -210,7 +221,7 @@ for k = 1:numel(fieldfn)
     view([90 -90]);
     xlabel('Space');
     title('Spatial profile');
-    
+
     subplot(2,2,2);
     contourf(t,SpaceDomain, SpatiotemporalFields(:,:,k) );
     colormap(cmap);shading flat;
@@ -218,8 +229,8 @@ for k = 1:numel(fieldfn)
     xlabel('Time'); ylabel('Space');
     title('Spatiotemporal field');
     caxis([-1,1]*max(abs( SpatiotemporalFields(:,:,k)),[],'all'));
-    
-    
+
+
     subplot(2,2,3);
     [power, phase, F] = spectral_fft( x(:,k), dt );
     stem( F,power );
@@ -227,12 +238,12 @@ for k = 1:numel(fieldfn)
     ylabel('Power');
     set(gca,'yscale','log');
     title('Power Spectrum of the time coefficient');
-    
+
     subplot(2,2,4);
     plot(t, x(:,k), 'DisplayName',"C "+k);
     xlabel('Time');
     title('Time coefficient');
-    
+
     sgtitle(component_names{k} + "; x(0) = " + x0(k));
 end
 
@@ -278,4 +289,3 @@ caxis(clim);
 sgtitle({"Input data; TimeScale = " + TimeScale + " Duration = "+max(TimeDomain); ...
     IncludedComponents; ExcludedComponents;
     },'horizontalAlignment', 'left' );
-
