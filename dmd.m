@@ -1,4 +1,4 @@
-function out = dmd( DataMatrix, dt, r, options )
+ function out = dmd( DataMatrix, dt, r, options )
 %% DMD Dynamic Mode Decomposition (exact version)
 %
 % out = dmd( DataMatrix, dt, r, ... )
@@ -14,6 +14,20 @@ function out = dmd( DataMatrix, dt, r, options )
 %     out = dmd( DataMatrix, dt, r, 'rom_type', VALUE)
 %         VALUE = 'lsq' - standard least-squares truncation {default}
 %         VALUE = 'tlsq' - total least squares truncation (Hemati 2017)
+%
+%     out = dmd( DataMatrix, dt, r, 'rrr', VALUE)
+ %        Drmac et al. DDMD_RRR optimization
+%         VALUE = 'none' Exact DMD style eigenvalue calculation
+%         VALUE = 'compute' - Compute residual errors for Az = \lambda z
+%                             eigenvalue computation (stored in out.residual)
+%         VALUE = 'optimize' - Optimize residual error for Az = \lambda z
+%                             eigenvalue computation (stored in
+%                             out.residual)
+%
+%    out = dmd( DataMatrix, dt, r, 'sortbyb', VALUE)
+%         VALUE = true - sort DMD modes by |b|
+%         VALUE = false - sort DMD modes by average L2 norm of time
+%                          coefficient {default}
 %
 %    out = dmd( DataMatrix, dt, r, 'sortbyb', VALUE)
 %         VALUE = true - sort DMD modes by |b|
@@ -52,7 +66,10 @@ arguments
     DataMatrix (:,:) double {mustBeNumeric, mustBeReal, mustBeFinite}
     dt (1,1) double {mustBePositive, mustBeFinite}
     r (1,1) double {mustBePositive,mustBeInteger,mustBeFinite}
-    options.rom_type {mustBeMember(options.rom_type,{'lsq','tlsq'})} = 'lsq'
+    options.rom_type {mustBeMember(options.rom_type,{'lsq','tlsq'})} = ...
+        'lsq'
+    options.rrr {mustBeMember(options.rrr,{'none','compute','optimize'})} = ...
+        'none'
     options.removefrequencies (1,:) double = []
     options.sortbyb (1,1) logical = false
     options.step (1,:) double {mustBeInteger,mustBeFinite} = 1
@@ -92,7 +109,6 @@ if ~isempty(options.removefrequencies)
     PI = pinv(transpose(Vandermonde))*transpose(Vandermonde);
     PI_o = pinv(transpose(VR_o))*transpose(VR_o);
 
-
     X1 = X1 - X1*PI_o;
     X2 = X2 - X2*PI_o;
 
@@ -106,12 +122,11 @@ if ~isempty(options.removefrequencies)
 
     out.AvgOmega = options.removefrequencies(:);
     out.AvgLambda = LambdaR(:);
-    
+
     meanL2 = abs(out.AvgB) .* sqrt( (exp(2*real(out.AvgOmega)*T)-1)./(2*real(out.AvgOmega)*T) );
-    meanL2(isnan(meanL2)) = abs(out.AvgB(isnan(meanL2)));    
-    
+    meanL2(isnan(meanL2)) = abs(out.AvgB(isnan(meanL2)));
+
     out.AvgMeanL2norm = meanL2;
-    
 
 end
 
@@ -151,6 +166,18 @@ assert( length(Atilde) == r, "Requested model rank not achieved")
 % Compute DMD Modes
 [W, D] = eig(Atilde);
 Phi = X2*Vr*diag(1./singular_values)*W;
+
+% IMPLEMENT FROM:
+% Drmač, Zlatko, Igor Mezić, and Ryan Mohr. 2018.
+% “Data Driven Modal Decompositions: Analysis and Enhancements.”
+% SIAM Journal on Scientific Computing 40 (4): A2253–85. https://doi.org/10.1137/17M1144155.
+
+switch (options.rrr)
+  case 'compute':
+    disp("PLACEHOLDER FOR COMPUTING RESIDUALS DMD_RRR")
+  case 'optimize':
+    disp("PLACEHOLDER FOR OPTIMIZING RESIDUALS DMD_RRR")
+end
 
 % normalize each column by its 2-norm (division by a constant)
 [Phi,~] = normalizeModes( Phi ); % see appendix
