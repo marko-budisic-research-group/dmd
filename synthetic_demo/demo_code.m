@@ -22,9 +22,12 @@ fitsteps = unique([1, randi([1,size(X,2)], 1,10), size(X,2)] );
 out = dmd(X, dt, ...
     svd_rank_truncation, ... % dimension of reduced DMD matrix
     'rom_type', 'tlsq', ...  % standard or total DMD
-    'sortbyb',false,... % sort modes by |b| or mean L2 (default:false)
-    'step', fitsteps ... % snapshots over which to optimize value of b
+    'dmd_type','rrr',...
+    'sortby','residual',... % sort modes by |b| or mean L2 (default:false)
+    'step', fitsteps, ... % snapshots over which to optimize value of b
+    'numericalRankTolerance',1e-4...
     );
+
 
 %% COMPUTE REDUCED ORDER MODEL OF DATA (optional)
 % reconstruct using all DMD modes (to convince ourselves that full DMD is roughly correct)
@@ -62,8 +65,13 @@ title("Discrete-time (DMD matrix) eigenvalues")
 
 
 nexttile;
-plot(out.omega,'ro','MarkerSize',9,'DisplayName','Pure DMD'); hold on; 
-plot(frequencies,'+','Color',repmat(0.35,[1,3]),'DisplayName','True freq');
+logritzes = log(out.ritzes.')/dt;
+scatter(real( out.omega ), imag(out.omega),64, 1./(1+normalize(out.optimalResiduals,'range')),'o','filled','DisplayName','Pure DMD'); hold on; 
+plot( real( logritzes ), imag( logritzes ), 'k-','Marker','.','HandleVisibility','off' );
+plot(frequencies,'r+','LineWidth',2,'MarkerSize',3,'DisplayName','True freq'); hold off;
+colorbar;
+set(gca,'Color','k');
+
 
 % plot mode index
 for k = 1:min(20, svd_rank_truncation)

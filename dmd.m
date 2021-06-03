@@ -1,4 +1,4 @@
- function out = dmd( DataMatrix, dt, r, options )
+function out = dmd( DataMatrix, dt, rom_dim, options )
 %% DMD Dynamic Mode Decomposition (exact version)
 %
 % out = dmd( DataMatrix, dt, r, ... )
@@ -16,7 +16,7 @@
 %         VALUE = 'tlsq' - total least squares truncation (Hemati 2017)
 %
 %     out = dmd( DataMatrix, dt, r, 'rrr', VALUE)
- %        Drmac et al. DDMD_RRR optimization
+%        Drmac et al. DDMD_RRR optimization
 %         VALUE = 'none' Exact DMD style eigenvalue calculation
 %         VALUE = 'compute' - Compute residual errors for Az = \lambda z
 %                             eigenvalue computation (stored in out.residual)
@@ -62,25 +62,27 @@
 % out.model_rank - rank of the model (= input r parameter)
 
 arguments
-
+    
     DataMatrix (:,:) double {mustBeNumeric, mustBeReal, mustBeFinite}
     dt (1,1) double {mustBePositive, mustBeFinite}
-    r (1,1) double {mustBePositive,mustBeInteger,mustBeFinite}
+    rom_dim (1,1) double {mustBePositive,mustBeInteger}
     options.rom_type {mustBeMember(options.rom_type,{'lsq','tlsq'})} = ...
         'lsq'
-    options.rrr {mustBeMember(options.rrr,{'none','compute','optimize'})} = ...
-        'none'
+    options.dmd_type {mustBeMember(options.dmd_type,{'exact','rrr'})} = ...
+        'rrr'
     options.removefrequencies (1,:) double = []
-    options.sortbyb (1,1) logical = false
+    options.sortby {mustBeMember(options.sortby,{'initcond','l2','residual'})} = ...
+        'residual'
     options.step (1,:) double {mustBeInteger,mustBeFinite} = 1
+    options.normalize (1,1) logical = true
+    options.numericalRankTolerance (1,1) double {mustBeNonnegative, mustBeFinite} = 0.0
 end
+
+
 
 if options.step == -1
     options.step = 1:size(DataMatrix,2);
 end
-
-assert( r<= min(size(DataMatrix)), ...
-    "ROM order has to be smaller than rank of input")
 
 %% Preprocessing
 Nsnapshots = size(DataMatrix,2);
@@ -92,99 +94,163 @@ X2=DataMatrix(:,2:end);
 
 if ~isempty(options.removefrequencies)
     disp('Removing predetermined frequencies')
-
+    
     % row vector of continuous frequencies
     OmegaR = reshape( options.removefrequencies, 1, [] );
-
+    
     % discrete frequencies row vector
     LambdaR = exp( OmegaR * dt );
-
+    
     % Vandermonde
     Vandermonde = LambdaR .^ transpose( 0:( Nsnapshots-1 ) );
-
+    
     % truncated vandermonde (for dealing with X1 and X2)
     VR_o = Vandermonde(2:end,:);
-
+    
     % projectors
     PI = pinv(transpose(Vandermonde))*transpose(Vandermonde);
     PI_o = pinv(transpose(VR_o))*transpose(VR_o);
-
+    
     X1 = X1 - X1*PI_o;
     X2 = X2 - X2*PI_o;
-
+    
     % the following two calculations are in-principle equivalent, but not
     % exactly when number of time steps is finite
     HarmonicAverage = DataMatrix*pinv(transpose(Vandermonde));
     %HarmonicAverage = DataMatrix*conj(Vandermonde)/Nsnapshots;
-
-
+    
+    
     [out.AvgPhi, out.AvgB] = normalizeModes(HarmonicAverage);
-
+    
     out.AvgOmega = options.removefrequencies(:);
     out.AvgLambda = LambdaR(:);
-
+    
     meanL2 = abs(out.AvgB) .* sqrt( (exp(2*real(out.AvgOmega)*T)-1)./(2*real(out.AvgOmega)*T) );
     meanL2(isnan(meanL2)) = abs(out.AvgB(isnan(meanL2)));
-
+    
     out.AvgMeanL2norm = meanL2;
-
+    
 end
 
+% pre-normalization
+if options.normalize
+    X1 = normalize(X1, 'norm',2);
+    X2 = normalize(X2, 'norm',2);
+end
 
 % total-DMD Hemati debias
 switch(options.rom_type)
     case 'tlsq'
-        disp("Total least-squares truncation to order " + r)
+        disp("Total least-squares truncation to order " + rom_dim)
         Z = [X1;X2];
         [~,~,Q] = svd(Z,'econ');
-        Qr = Q(:,1:r);
+        Qr = Q(:,1:rom_dim);
         X1 = X1*Qr;
         X2 = X2*Qr;
     case 'lsq'
-        disp("Standard least-squares truncation to order " + r)
+        disp("Standard least-squares truncation to order " + rom_dim)
 end
 
+%% SVD subspace selection
+[U,Sigma,V] = svd( X1, 0 );
+sigma = diag(Sigma);
+numericalRank = find( sigma >= sigma(1)*options.numericalRankTolerance, 1, 'last' );
+subspaceSize = min(rom_dim, numericalRank);
+if subspaceSize < rom_dim
+    warning("Numerical rank = " + numericalRank + " is smaller than requested ROM dimension = " + rom_dim);
+end
+Ur = U(:, 1:subspaceSize);
+Vr = V(:,1:subspaceSize);
+Sigmar = Sigma(1:subspaceSize, 1:subspaceSize);
 
-%% Core DMD algorithm
 
-% SVD
-[U, S, V] = svd(X1, 'econ');
-Ur = U(:, 1:r);
-Sr = S(1:r, 1:r);
-Vr = V(:,1:r);
+%%
 
-% Build Atilde
-singular_values = diag(Sr);
 
-Atilde = transpose(Ur)*X2*Vr*diag(1./singular_values);
+switch(options.dmd_type)
+    case 'exact'
+        disp('Exact DMD');
+        % Build Atilde
+        singular_values = diag(Sigmar);
+        
+        Atilde = transpose(Ur)*X2*Vr*diag(1./singular_values);
+        
+        assert( all(~isnan(Atilde),'all') && all(~isinf(Atilde),'all'), ...
+            "Atilde shouldn't contain NaN or Inf - check invertibility of Sr")
+        
+        assert( length(Atilde) == rom_dim, "Requested model rank not achieved")
+        
+        % Compute DMD Modes
+        [W, Lambda] = eig(Atilde);
+        Phi = X2*Vr*diag(1./singular_values)*W;
+        %% Compute continuous-time eigenvalues
+        lambda = diag(Lambda);
+        optimalResiduals = nan(size(lambda));
+        
+    case 'rrr'
+        disp('DDMD_RRR');
+        
+        % Algorithm 2 from:
+        % Drmač, Zlatko, Igor Mezić, and Ryan Mohr. 2018.
+        % “Data Driven Modal Decompositions: Analysis and Enhancements.”
+        % SIAM Journal on Scientific Computing 40 (4): A2253–85. https://doi.org/10.1137/17M1144155.
+                
+        
+        AUr = X2*(Vr*diag(1./sigma(1:subspaceSize)));
+        
+        
+        R = triu( qr( [Ur, AUr], 0 ) );        
+        numRankPrime = min( size(Ur,1) - subspaceSize, subspaceSize );
+        Rblocks = mat2cell( R, [subspaceSize, size(Ur,1)-subspaceSize], [subspaceSize, subspaceSize] );
+        [R11,~,R12,R22] = deal(Rblocks{:});
+                
+        % Rayleigh quotient
+        Sk = diag( conj( diag(R11) ) )*R12;
+        ritz = eig(Sk); % Ritz values - can be used as DMD values
+                
+        W = nan(subspaceSize);
+        optimalResiduals = nan(subspaceSize,1);
+        
+        
+        % the following could be spun in a loop until ritz ~ ritzCorrected
 
-assert( all(~isnan(Atilde),'all') && all(~isinf(Atilde),'all'), ...
-    "Atilde shouldn't contain NaN or Inf - check invertibility of Sr")
-
-assert( length(Atilde) == r, "Requested model rank not achieved")
-
-% Compute DMD Modes
-[W, D] = eig(Atilde);
-Phi = X2*Vr*diag(1./singular_values)*W;
-
-% IMPLEMENT FROM:
-% Drmač, Zlatko, Igor Mezić, and Ryan Mohr. 2018.
-% “Data Driven Modal Decompositions: Analysis and Enhancements.”
-% SIAM Journal on Scientific Computing 40 (4): A2253–85. https://doi.org/10.1137/17M1144155.
-
-switch (options.rrr)
-  case 'compute':
-    disp("PLACEHOLDER FOR COMPUTING RESIDUALS DMD_RRR")
-  case 'optimize':
-    disp("PLACEHOLDER FOR OPTIMIZING RESIDUALS DMD_RRR")
+        ritzOld = nan(size(ritz));
+        count = 0;
+        discrepancy = [];
+        ritzes = ritz;
+        while not(norm(ritzOld - ritz,'inf') < 1e-6) && count < 10
+            count = count+1;
+            discrepancy(end+1) = norm(ritzOld - ritz,'inf');
+            disp("Ritz correction try " + count + " Discrepancy = " + discrepancy(end) );
+            ritzOld = ritz;
+            for i = 1:subspaceSize
+                
+                M = [R12; R22] - ritz(i)*[R11; zeros(size(R22))];
+                
+                % compute smallest singular value
+                [~,SS,VV] = svd( M, 0 );
+                optimalResiduals(i) = SS(end,end);
+                
+                svec_min = VV(:,end);
+                ritz(i) = svec_min' * Sk * svec_min;
+                W(:,i) = svec_min;
+            end
+            ritzes(:,end+1) = ritz;
+        end
+        out.discrepancy = discrepancy;
+        out.ritzes = ritzes;
+        
+        Phi = Ur*W;
+        whos
+        
+        lambda = ritz;
 end
 
-% normalize each column by its 2-norm (division by a constant)
-[Phi,~] = normalizeModes( Phi ); % see appendix
-
-%% Compute continuous-time eigenvalues
-lambda = diag(D);
+Lambda = diag(lambda);
 omega = log(lambda)/dt;
+
+% normalize each mode by its 2-norm (division by a constant)
+[Phi,~] = normalizeModes( Phi ); % see appendix
 
 %% compute combination coefficients
 % by L2-fit to a sequence of snapshots
@@ -199,7 +265,7 @@ LHS = zeros([size(Phi), numel(options.step)]);
 
 % advance mode vectors by steps and set them into layers of LHS tensor
 for k = 1:numel(options.step)
-    LHS(:,:,k) = Phi*D^(options.step(k)-1);
+    LHS(:,:,k) = Phi*Lambda^(options.step(k)-1);
 end
 
 % reshape LHS into a 2D matrix so that the layers are stacked on top of
@@ -237,25 +303,31 @@ assert(all( ~isnan(meanL2norm) ), "Problems: L2 norm computation failed");
 
 
 %% Sorting
-if options.sortbyb
-    [~,idx] = sort( abs(b), 'descend' );
-else
-    [~,idx] = sort( meanL2norm, 'descend' );
+
+switch(options.sortby)
+    case 'initcond'
+    [out.rank,idx] = sort( abs(b), 'descend' );
+    case 'l2'
+    [out.rank,idx] = sort( meanL2norm, 'descend' );
+    case 'residual'
+    [out.rank,idx] = sort( optimalResiduals, 'ascend' );
+    otherwise
+        error('Unknown sorting option')        
 end
 
+
+out.optimalResiduals = optimalResiduals(idx);
 out.meanL2norm = meanL2norm(idx);
 out.b = b(idx);
 out.Phi = Phi(:,idx);
 out.omega = omega(idx);
 out.lambda = lambda(idx);
-out.model_rank = length(Atilde);
+out.model_rank = length(lambda);
 end
 
 function [NormMatrix, Coefficients ] = normalizeModes( ModeMatrix )
 
 NormalizationPhase = median( angle(ModeMatrix), 1 );
-
-
 Coefficients = vecnorm( ModeMatrix ) .* exp( 1j * NormalizationPhase );
 NormMatrix = ModeMatrix ./ Coefficients;
 end
