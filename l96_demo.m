@@ -18,9 +18,9 @@ IC = 1./(1:N).';
 [t,y] = ode45( @(t,y)l96(t,y,3), T, IC );
 y = y'; % transpose it - columns are state vectors
 
-% % remove the transient
-% y = y(:, T>60);
-% t = t(T>60);
+% remove the transient
+%y = y(:, T>60);
+%t = t(T>60);
 
 
 % spatiotemporal matrix
@@ -39,18 +39,22 @@ title("Input data");
 % decay times and periods (this is completely analogous to how you'd
 % interpret eigenvalues of x' = Ax linear system).
 
-addpath('./dmd') % this is my code folder
 
 % compute DMD without and with removal of frequencies
 desired_rank = 50;
 fitsteps = ceil( linspace(1, size(y,2), 5) ); % five equispaced steps to fit over
 
+% compute DMD without and with removal of frequencies
 out = dmd(y, dt, ...
     desired_rank, ... % dimension of reduced DMD matrix
-    'rom_type', 'tlsq', ...  % standard or total DMD
-    'sortbyb',false,... % sort modes by |b| or mean L2 (default:false)
-    'step', fitsteps ... % snapshots over which to optimize value of b
+    'rom_type', 'lsq', ...  % standard or total DMD
+    'dmd_type','rrr',...
+    'sortby','residual',... % sort modes by |b| or mean L2 (default:false)
+    'step', fitsteps, ... % snapshots over which to optimize value of b
+    'numericalRankTolerance',1e-5,...
+    'ritzMaxIteration',3 ...
     );
+
 
 % out.meanL2norm = [out.AvgMeanL2norm; out.meanL2norm];
 % out.b = [out.AvgB; out.b];
@@ -122,7 +126,10 @@ figure(2);
 
 tiledlayout('flow');
 nexttile;
-scatter( real( out.omega), imag( out.omega ), 2*(1 + out.meanL2norm).^2, sign( real(out.omega) ),'filled');
+%scatter( real( out.omega), imag( out.omega ), 2*(1 + out.meanL2norm).^2, sign( real(out.omega) ),'filled');
+scatter( real( out.omega), imag( out.omega ) ,'filled');
+
+
 colormap( gca, flipud( eye(3) ) );
 title( colorbar, 'Sign of re(evalue)')
 title('Continuous-time eigenvalues');
