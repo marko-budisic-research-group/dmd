@@ -1,45 +1,58 @@
 function out = dmd( DataMatrix, dt, rom_dim, options )
 %% DMD Dynamic Mode Decomposition (exact version)
 %
-% out = dmd( DataMatrix, dt, r, ... )
+% out = dmd( DataMatrix, dt, rom_dim, ... )
 %
 % Inputs:
 %     DataMatrix (:,:) double {mustBeNumeric, mustBeReal, mustBeFinite} -- INPUT SNAPSHOT MATRIX (columns are snapshots)
 %     dt (1,1) double {mustBePositive, mustBeFinite} -- INPUT SNAPSHOT TIMESTEP (columns are snapshots)
-%     r (1,1) double {mustBePositive,mustBeInteger,mustBeFinite} -- REQUESTED DIMENSION OF REDUCED-ORDER MODEL
+%     rom_dim (1,1) double {mustBePositive,mustBeInteger,mustBeFinite} -- REQUESTED DIMENSION OF REDUCED-ORDER MODEL
 %
 % Additional optional name-value pairs, specified as
-% out = dmd( DataMatrix, dt, r, NAME, VALUE, NAME, VALUE,... )
+% out = dmd( DataMatrix, dt, rom_dim, NAME, VALUE, NAME, VALUE,... )
 %
-%     out = dmd( DataMatrix, dt, r, 'rom_type', VALUE)
+%     out = dmd( DataMatrix, dt, rom_dim, 'rom_type', VALUE)
 %         VALUE = 'lsq' - standard least-squares truncation {default}
 %         VALUE = 'tlsq' - total least squares truncation (Hemati 2017)
 %
-%     out = dmd( DataMatrix, dt, r, 'rrr', VALUE)
-%        Drmac et al. DDMD_RRR optimization
-%         VALUE = 'none' Exact DMD style eigenvalue calculation
-%         VALUE = 'compute' - Compute residual errors for Az = \lambda z
-%                             eigenvalue computation (stored in out.residual)
-%         VALUE = 'optimize' - Optimize residual error for Az = \lambda z
-%                             eigenvalue computation (stored in
-%                             out.residual)
+%     out = dmd( DataMatrix, dt, rom_dim, 'dmd_type', VALUE)
+%         VALUE = 'exact' Exact DMD style eigenvalue calculation
+%         VALUE = 'rrr' (Drmac et al. 2018) DDMD_RRR optimization {default}
 %
-%    out = dmd( DataMatrix, dt, r, 'sortbyb', VALUE)
-%         VALUE = true - sort DMD modes by |b|
-%         VALUE = false - sort DMD modes by average L2 norm of time
-%                          coefficient {default}
+%    out = dmd( DataMatrix, dt, rom_dim, 'sortby', VALUE)
+%         VALUE = 'initcond' - sort DMD modes by |b|
+%         VALUE = 'l2' - sort DMD modes by average L2 norm of time
+%                        coefficient
+%         VALUE = 'residual' - sort DMD modes by optimal residual {default}
 %
-%    out = dmd( DataMatrix, dt, r, 'sortbyb', VALUE)
-%         VALUE = true - sort DMD modes by |b|
-%         VALUE = false - sort DMD modes by average L2 norm of time
-%                          coefficient {default}
+%    out = dmd( DataMatrix, dt, rom_dim, 'normalize', VALUE)
+%         VALUE = true - normalize snapshot matrices by column L2 norms,
+%                        to avoid scaling effects on POD
 %
-%    out = dmd( DataMatrix, dt, r, 'step', VALUE)
+%    out = dmd( DataMatrix, dt, rom_dim, 'step', VALUE)
 %         VALUE is a row-vector of snapshot indices at which optimization is
 %         performed to determine b coefficients in the expansion.
 %         If VALUE = -1, all snapshots are used.
 %
-%    out = dmd( DataMatrix, dt, r, 'removefrequencies', VALUE)
+%    out = dmd( DataMatrix, dt, rom_dim, 'numericalRankTolerance', VALUE)
+%         VALUE is the threshold for ratios sigma_n/sigma_1 of singular values
+%               used to determine the numerical rank/"significance" of the POD subspace
+%
+%    out = dmd( DataMatrix, dt, rom_dim, 'ritzMaxIteration', IT, ...
+%                 'ritzATOL', ATOL, 'ritzRTOL', RTOL )
+%
+%                 These parameters
+%                 control the stopping criterion for the residual optimization
+%                 loop. The loop will perform at most IT iterates, it stops
+%                 sooner if subsequent Ritz values are within RTOL/ATOL range.
+%
+%    out = dmd( DataMatrix, dt, rom_dim, 'step', VALUE)
+%         VALUE is a row-vector of snapshot indices at which optimization is
+%         performed to determine b coefficients in the expansion.
+%         If VALUE = -1, all snapshots are used.
+%
+%
+%    out = dmd( DataMatrix, dt, rom_dim, 'removefrequencies', VALUE)
 %         VALUE = vector of continuous-time complex-valued frequencies to
 %                 remove from data by harmonic averaging before DMD is
 %                 applied.
@@ -62,7 +75,7 @@ function out = dmd( DataMatrix, dt, rom_dim, options )
 % out.model_rank - rank of the model (= input r parameter)
 
 arguments
-    
+
     DataMatrix (:,:) double {mustBeNumeric, mustBeReal, mustBeFinite}
     dt (1,1) double {mustBePositive, mustBeFinite}
     rom_dim (1,1) double {mustBePositive,mustBeInteger}
@@ -82,6 +95,16 @@ arguments
 
 end
 
+% use QR-SVD if available (see Drmac et al 2018)
+if exist('svd_lapack')
+    disp('Using GESVD')
+    mysvd = @(x)svd_lapack(x, 0,'gesvd');
+else
+    disp('Using built-in SVD')
+    mysvd = @(x)svd(x, 0);
+end
+
+
 
 
 if options.step == -1
@@ -98,42 +121,42 @@ X2=DataMatrix(:,2:end);
 
 if ~isempty(options.removefrequencies)
     disp('Removing predetermined frequencies')
-    
+
     % row vector of continuous frequencies
     OmegaR = reshape( options.removefrequencies, 1, [] );
-    
+
     % discrete frequencies row vector
     LambdaR = exp( OmegaR * dt );
-    
+
     % Vandermonde
     Vandermonde = LambdaR .^ transpose( 0:( Nsnapshots-1 ) );
-    
+
     % truncated vandermonde (for dealing with X1 and X2)
     VR_o = Vandermonde(2:end,:);
-    
+
     % projectors
     PI = pinv(transpose(Vandermonde))*transpose(Vandermonde);
     PI_o = pinv(transpose(VR_o))*transpose(VR_o);
-    
+
     X1 = X1 - X1*PI_o;
     X2 = X2 - X2*PI_o;
-    
+
     % the following two calculations are in-principle equivalent, but not
     % exactly when number of time steps is finite
     HarmonicAverage = DataMatrix*pinv(transpose(Vandermonde));
     %HarmonicAverage = DataMatrix*conj(Vandermonde)/Nsnapshots;
-    
-    
+
+
     [out.AvgPhi, out.AvgB] = normalizeModes(HarmonicAverage);
-    
+
     out.AvgOmega = options.removefrequencies(:);
     out.AvgLambda = LambdaR(:);
-    
+
     meanL2 = abs(out.AvgB) .* sqrt( (exp(2*real(out.AvgOmega)*T)-1)./(2*real(out.AvgOmega)*T) );
     meanL2(isnan(meanL2)) = abs(out.AvgB(isnan(meanL2)));
-    
+
     out.AvgMeanL2norm = meanL2;
-    
+
 end
 
 % pre-normalization
@@ -147,7 +170,7 @@ switch(options.rom_type)
     case 'tlsq'
         disp("Total least-squares truncation to order " + rom_dim)
         Z = [X1;X2];
-        [~,~,Q] = svd(Z,'econ');
+        [~,~,Q] = mysvd(Z);
         Qr = Q(:,1:rom_dim);
         X1 = X1*Qr;
         X2 = X2*Qr;
@@ -156,7 +179,7 @@ switch(options.rom_type)
 end
 
 %% SVD subspace selection
-[U,Sigma,V] = svd( X1, 0 );
+[U,Sigma,V] = mysvd( X1 );
 sigma = diag(Sigma);
 numericalRank = find( sigma >= sigma(1)*options.numericalRankTolerance, 1, 'last' );
 subspaceSize = min(rom_dim, numericalRank);
@@ -176,50 +199,50 @@ switch(options.dmd_type)
         disp('Exact DMD');
         % Build Atilde
         singular_values = diag(Sigmar);
-        
+
         Atilde = transpose(Ur)*X2*Vr*diag(1./singular_values);
-        
+
         assert( all(~isnan(Atilde),'all') && all(~isinf(Atilde),'all'), ...
             "Atilde shouldn't contain NaN or Inf - check invertibility of Sr")
-        
+
         assert( length(Atilde) == rom_dim, "Requested model rank not achieved")
-        
+
         % Compute DMD Modes
         [W, Lambda] = eig(Atilde);
         Phi = X2*Vr*diag(1./singular_values)*W;
         %% Compute continuous-time eigenvalues
         lambda = diag(Lambda);
         optimalResiduals = nan(size(lambda));
-        
+
     case 'rrr'
         disp('DDMD_RRR');
-        
+
         % Algorithm 2 from:
         % Drmač, Zlatko, Igor Mezić, and Ryan Mohr. 2018.
         % “Data Driven Modal Decompositions: Analysis and Enhancements.”
         % SIAM Journal on Scientific Computing 40 (4): A2253–85. https://doi.org/10.1137/17M1144155.
-                
-        
+
+
         AUr = X2*(Vr*diag(1./sigma(1:subspaceSize)));
-        
-        
-        R = triu( qr( [Ur, AUr], 0 ) );        
+
+
+        R = triu( qr( [Ur, AUr], 0 ) );
         numRankPrime = min( size(Ur,1) - subspaceSize, subspaceSize );
         Rblocks = mat2cell( R, [subspaceSize, size(Ur,1)-subspaceSize], [subspaceSize, subspaceSize] );
         [R11,~,R12,R22] = deal(Rblocks{:});
-                
+
         % Rayleigh quotient
         Sk = diag( conj( diag(R11) ) )*R12;
         ritz = eig(Sk); % Ritz values - can be used as DMD values
-                
+
         W = nan(subspaceSize);
         optimalResiduals = nan(subspaceSize,1);
-        
-        
+
+
         %%
         % Ritz value adjustment loop
         %
-        ritzOld = zeros(size(ritz)); 
+        ritzOld = zeros(size(ritz));
         count = 0;
         discrepancy = nan(options.ritzMaxIteration,1);
         ritzes = ritz;
@@ -230,13 +253,13 @@ switch(options.dmd_type)
             disp("Ritz correction try " + count + " Discrepancy = " + discrepancy(count) );
             ritzOld = ritz;
             for i = 1:subspaceSize
-                
+
                 M = [R12; R22] - ritz(i)*[R11; zeros(size(R22))];
-                
+
                 % compute smallest singular value
-                [~,SS,VV] = svd( M, 0 );
+                [~,SS,VV] = mysvd( M );
                 optimalResiduals(i) = SS(end,end);
-                
+
                 svec_min = VV(:,end);
                 ritz(i) = svec_min' * Sk * svec_min;
                 W(:,i) = svec_min;
@@ -246,8 +269,8 @@ switch(options.dmd_type)
         %%
         out.discrepancy = discrepancy;
         out.ritzes = ritzes;
-        
-        Phi = Ur*W;        
+
+        Phi = Ur*W;
         lambda = ritzes(:,1);
 end
 
@@ -317,7 +340,7 @@ switch(options.sortby)
     case 'residual'
     [out.rank,idx] = sort( optimalResiduals, 'ascend' );
     otherwise
-        error('Unknown sorting option')        
+        error('Unknown sorting option')
 end
 
 

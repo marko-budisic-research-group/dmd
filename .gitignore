@@ -1,3 +1,6 @@
+# Compiled MEX binaries (all platforms)
+*.mex*
+
 ##EMACS temp files
 *~
 \#*\#
