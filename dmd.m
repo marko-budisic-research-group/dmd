@@ -76,6 +76,10 @@ arguments
     options.step (1,:) double {mustBeInteger,mustBeFinite} = 1
     options.normalize (1,1) logical = true
     options.numericalRankTolerance (1,1) double {mustBeNonnegative, mustBeFinite} = 0.0
+    options.ritzMaxIteration (1,1) double {mustBePositive} = 1
+    options.ritzATOL (1,1) double {mustBeNonnegative} = 1e-4
+    options.ritzRTOL (1,1) double {mustBeNonnegative} = 1e-2
+
 end
 
 
@@ -212,16 +216,18 @@ switch(options.dmd_type)
         optimalResiduals = nan(subspaceSize,1);
         
         
-        % the following could be spun in a loop until ritz ~ ritzCorrected
-
-        ritzOld = nan(size(ritz));
+        %%
+        % Ritz value adjustment loop
+        %
+        ritzOld = zeros(size(ritz)); 
         count = 0;
-        discrepancy = [];
+        discrepancy = nan(options.ritzMaxIteration,1);
         ritzes = ritz;
-        while not(norm(ritzOld - ritz,'inf') < 1e-6) && count < 10
+        while not( allclose(ritzOld, ritz, options.ritzATOL, options.ritzRTOL) ) && ...
+                count < options.ritzMaxIteration
             count = count+1;
-            discrepancy(end+1) = norm(ritzOld - ritz,'inf');
-            disp("Ritz correction try " + count + " Discrepancy = " + discrepancy(end) );
+            [~,discrepancy(count)] = allclose(ritzOld, ritz, options.ritzATOL, options.ritzRTOL);
+            disp("Ritz correction try " + count + " Discrepancy = " + discrepancy(count) );
             ritzOld = ritz;
             for i = 1:subspaceSize
                 
@@ -237,13 +243,12 @@ switch(options.dmd_type)
             end
             ritzes(:,end+1) = ritz;
         end
+        %%
         out.discrepancy = discrepancy;
         out.ritzes = ritzes;
         
-        Phi = Ur*W;
-        whos
-        
-        lambda = ritz;
+        Phi = Ur*W;        
+        lambda = ritzes(:,1);
 end
 
 Lambda = diag(lambda);
@@ -330,4 +335,12 @@ function [NormMatrix, Coefficients ] = normalizeModes( ModeMatrix )
 NormalizationPhase = median( angle(ModeMatrix), 1 );
 Coefficients = vecnorm( ModeMatrix ) .* exp( 1j * NormalizationPhase );
 NormMatrix = ModeMatrix ./ Coefficients;
+end
+
+function [out,maxd] = allclose(a,b,atol,rtol)
+% check that two arrays are within numerical tolerance to each other
+d = abs(a(:)-b(:));
+out = all( d - atol+rtol*abs(b(:)) <= 0 );
+maxd= max(d - atol+rtol*abs(b(:)));
+
 end
