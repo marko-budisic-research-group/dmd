@@ -21,17 +21,18 @@ fitsteps = unique([1, randi([1,size(X,2)], 1,10), size(X,2)] );
 % compute DMD without and with removal of frequencies
 out = dmd(X, dt, ...
     svd_rank_truncation, ... % dimension of reduced DMD matrix
-    'rom_type', 'tlsq', ...  % standard or total DMD
+    'rom_type', 'lsq', ...  % standard or total DMD
     'dmd_type','rrr',...
     'sortby','residual',... % sort modes by |b| or mean L2 (default:false)
     'step', fitsteps, ... % snapshots over which to optimize value of b
-    'numericalRankTolerance',1e-4...
+    'numericalRankTolerance',1e-5,...
+    'ritzMaxIteration',3 ...
     );
 
 
 %% COMPUTE REDUCED ORDER MODEL OF DATA (optional)
 % reconstruct using all DMD modes (to convince ourselves that full DMD is roughly correct)
-ROM_N = 8;
+ROM_N = sum( out.optimalResiduals < 1e-2 )
 
 DataMatrixROM = reduce_order( out.Phi, out.omega, out.b, t, 1:ROM_N);
 
@@ -70,8 +71,7 @@ scatter(real( out.omega ), imag(out.omega),64, 1./(1+normalize(out.optimalResidu
 plot( real( logritzes ), imag( logritzes ), 'k-','Marker','.','HandleVisibility','off' );
 plot(frequencies,'r+','LineWidth',2,'MarkerSize',3,'DisplayName','True freq'); hold off;
 colorbar;
-set(gca,'Color','k');
-
+colormap(winter(9));
 
 % plot mode index
 for k = 1:min(20, svd_rank_truncation)
