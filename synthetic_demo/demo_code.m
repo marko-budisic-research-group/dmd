@@ -7,6 +7,7 @@ linear_combination
 noise = randn(size(X0));
 noise = norm(X0(:,1))* noise / norm(noise(:,1));
 X = X0 + 0.01*noise;
+X = X0;
 
 
 %% COMPUTE DMD
@@ -26,7 +27,7 @@ out = dmd(X, dt, ...
     'sortby','residual',... % sort modes by |b| or mean L2 (default:false)
     'step', fitsteps, ... % snapshots over which to optimize value of b
     'numericalRankTolerance',1e-5,...
-    'ritzMaxIteration',3 ...
+    'ritzMaxIteration',10 ...
     );
 
 
