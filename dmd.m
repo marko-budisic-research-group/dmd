@@ -25,6 +25,12 @@ function out = dmd( DataMatrix, dt, rom_dim, varargin )
 %                        coefficient
 %         VALUE = 'residual' - sort DMD modes by optimal residual {default}
 %
+%
+%    out = dmd( DataMatrix, dt, rom_dim, 'svdcode', VALUE)
+%         VALUE = 'QR' - use QR-SVD from Lapack for SVD algorithm {default}
+%                      - requires (automatic) mex compilation on first run
+%         VALUE = 'DD' - use DD-SVD from MATLAB for SVD algorithm 
+%
 %    out = dmd( DataMatrix, dt, rom_dim, 'normalize', VALUE)
 %         VALUE = true - normalize snapshot matrices by column L2 norms,
 %                        to avoid scaling effects on POD
@@ -73,27 +79,8 @@ function out = dmd( DataMatrix, dt, rom_dim, varargin )
 % out.omega - continuous time DMD eigenvalue omega = log( lambda ) / dt
 % out.lambda - discrete time DMD eigenvalue lambda = exp( omega * dt )
 % out.model_rank - rank of the model (= input r parameter)
+% out.optimalResiduals - residual after adjustment (if DDMD-RRR was used)
 % 
-% arguments
-% 
-%     DataMatrix (:,:) double {mustBeNumeric, mustBeReal, mustBeFinite}
-%     dt (1,1) double {mustBePositive, mustBeFinite}
-%     rom_dim (1,1) double {mustBePositive,mustBeInteger}
-%     options.rom_type {mustBeMember(options.rom_type,{'lsq','tlsq'})} = ...
-%         'lsq'
-%     options.dmd_type {mustBeMember(options.dmd_type,{'exact','rrr'})} = ...
-%         'rrr'
-%     options.removefrequencies (1,:) double = []
-%     options.sortby {mustBeMember(options.sortby,{'initcond','l2','residual'})} = ...
-%         'residual'
-%     options.step (1,:) double {mustBeInteger,mustBeFinite} = 1
-%     options.normalize (1,1) logical = true
-%     options.ritzMaxIteration (1,1) double {mustBePositive} = 1
-%     options.ritzATOL (1,1) double {mustBeNonnegative} = 1e-4
-%     options.ritzRTOL (1,1) double {mustBeNonnegative} = 1e-2
-%     options.numericalRankTolerance (1,1) double {mustBeNonnegative, mustBeFinite} = 0.0
-% 
-% end
 
 p = inputParser;
 
