@@ -1,4 +1,4 @@
-function out = dmd( DataMatrix, dt, rom_dim, options )
+function out = dmd( DataMatrix, dt, rom_dim, varargin )
 %% DMD Dynamic Mode Decomposition (exact version)
 %
 % out = dmd( DataMatrix, dt, rom_dim, ... )
@@ -73,39 +73,64 @@ function out = dmd( DataMatrix, dt, rom_dim, options )
 % out.omega - continuous time DMD eigenvalue omega = log( lambda ) / dt
 % out.lambda - discrete time DMD eigenvalue lambda = exp( omega * dt )
 % out.model_rank - rank of the model (= input r parameter)
+% 
+% arguments
+% 
+%     DataMatrix (:,:) double {mustBeNumeric, mustBeReal, mustBeFinite}
+%     dt (1,1) double {mustBePositive, mustBeFinite}
+%     rom_dim (1,1) double {mustBePositive,mustBeInteger}
+%     options.rom_type {mustBeMember(options.rom_type,{'lsq','tlsq'})} = ...
+%         'lsq'
+%     options.dmd_type {mustBeMember(options.dmd_type,{'exact','rrr'})} = ...
+%         'rrr'
+%     options.removefrequencies (1,:) double = []
+%     options.sortby {mustBeMember(options.sortby,{'initcond','l2','residual'})} = ...
+%         'residual'
+%     options.step (1,:) double {mustBeInteger,mustBeFinite} = 1
+%     options.normalize (1,1) logical = true
+%     options.ritzMaxIteration (1,1) double {mustBePositive} = 1
+%     options.ritzATOL (1,1) double {mustBeNonnegative} = 1e-4
+%     options.ritzRTOL (1,1) double {mustBeNonnegative} = 1e-2
+%     options.numericalRankTolerance (1,1) double {mustBeNonnegative, mustBeFinite} = 0.0
+% 
+% end
 
-arguments
+p = inputParser;
 
-    DataMatrix (:,:) double {mustBeNumeric, mustBeReal, mustBeFinite}
-    dt (1,1) double {mustBePositive, mustBeFinite}
-    rom_dim (1,1) double {mustBePositive,mustBeInteger}
-    options.rom_type {mustBeMember(options.rom_type,{'lsq','tlsq'})} = ...
-        'lsq'
-    options.dmd_type {mustBeMember(options.dmd_type,{'exact','rrr'})} = ...
-        'rrr'
-    options.removefrequencies (1,:) double = []
-    options.sortby {mustBeMember(options.sortby,{'initcond','l2','residual'})} = ...
-        'residual'
-    options.step (1,:) double {mustBeInteger,mustBeFinite} = 1
-    options.normalize (1,1) logical = true
-    options.numericalRankTolerance (1,1) double {mustBeNonnegative, mustBeFinite} = 0.0
-    options.ritzMaxIteration (1,1) double {mustBePositive} = 1
-    options.ritzATOL (1,1) double {mustBeNonnegative} = 1e-4
-    options.ritzRTOL (1,1) double {mustBeNonnegative} = 1e-2
+p.addRequired('DataMatrix',@(M)validateattributes(M, 'numeric',{'2d','real','finite'})  );
+p.addRequired('dt',@(s)validateattributes(s, 'numeric',{'scalar','positive','finite'}) );
+p.addRequired('rom_dim', @(s)validateattributes(s, 'numeric',{'scalar','positive','finite','integer'}));
 
-end
+p.addParameter('rom_type', 'lsq', @(x)assert(ismember(x,{'lsq','tlsq'}),'Input not recognized: %s',x) );
+p.addParameter('dmd_type', 'exact', @(x)assert(ismember(x,{'exact','rrr'}),'Input not recognized: %s',x) );
+
+p.addParameter('removefrequencies', [], @(s)validateattributes(s,  'numeric',{'row'}));
+p.addParameter('sortby', 'residual', @(x)assert(ismember(x,{'initcond','l2','residual'}),'Input not recognized: %s',x) );
+
+p.addParameter('step',1,@(s)validateattributes(s, 'numeric', {'row','integer','finite'}) );
+p.addParameter('normalize',true,@(s)validateattributes(s, 'numeric', {'scalar','logical'}) );
+
+p.addParameter('ritzMaxIteration',1,@(s)validateattributes(s, 'numeric', {'scalar','integer','nonnegative'}) );
+
+p.addParameter('ritzATOL',1e-4,@(s)validateattributes(s, 'numeric', {'scalar','nonnegative'}) );
+p.addParameter('ritzRTOL',1e-2,@(s)validateattributes(s, 'numeric', {'scalar','nonnegative'}) );
+
+p.addParameter('numericalRankTolerance',0.0,@(s)validateattributes(s, 'numeric', {'scalar','nonnegative','finite'}) );
+
+p.addParameter('svdcode', 'QR', @(x)assert(ismember(x,{'QR','DD'}),'Input not recognized: %s',x) );
+
+parse(p,DataMatrix, dt, rom_dim, varargin{:});
+options = p.Results;
+
 
 % use QR-SVD if available (see Drmac et al 2018)
-if exist('svd_lapack')
-    disp('Using GESVD')
+if exist('svd_lapack') && strcmpi( options.svdcode,'QR')
+    disp('Using QR SVD (Lapack GESVD)')
     mysvd = @(x)svd_lapack(x, 0,'gesvd');
 else
-    disp('Using built-in SVD')
+    disp('Using DD SVD (built-in SVD)')
     mysvd = @(x)svd(x, 0);
 end
-
-
-
 
 if options.step == -1
     options.step = 1:size(DataMatrix,2);
@@ -193,6 +218,7 @@ Sigmar = Sigma(1:subspaceSize, 1:subspaceSize);
 
 %%
 
+clear X1;
 
 switch(options.dmd_type)
     case 'exact'
@@ -210,6 +236,7 @@ switch(options.dmd_type)
         % Compute DMD Modes
         [W, Lambda] = eig(Atilde);
         Phi = X2*Vr*diag(1./singular_values)*W;
+        clear X2;
         %% Compute continuous-time eigenvalues
         lambda = diag(Lambda);
         optimalResiduals = nan(size(lambda));
@@ -224,7 +251,7 @@ switch(options.dmd_type)
 
 
         AUr = X2*(Vr*diag(1./sigma(1:subspaceSize)));
-
+        clear X2;
 
         R = triu( qr( [Ur, AUr], 0 ) );
         numRankPrime = min( size(Ur,1) - subspaceSize, subspaceSize );
@@ -246,6 +273,10 @@ switch(options.dmd_type)
         count = 0;
         discrepancy = nan(options.ritzMaxIteration,1);
         ritzes = ritz;
+        Mleft = [R12; R22];
+        Mright = [R11; zeros(size(R22))];
+        
+        
         while not( allclose(ritzOld, ritz, options.ritzATOL, options.ritzRTOL) ) && ...
                 count < options.ritzMaxIteration
             count = count+1;
@@ -254,7 +285,7 @@ switch(options.dmd_type)
             ritzOld = ritz;
             for i = 1:subspaceSize
 
-                M = [R12; R22] - ritz(i)*[R11; zeros(size(R22))];
+                M = Mleft - ritz(i)*Mright;
 
                 % compute smallest singular value
                 [~,SS,VV] = mysvd( M );
@@ -266,6 +297,7 @@ switch(options.dmd_type)
             end
             ritzes(:,end+1) = ritz;
         end
+        clear Mleft Mright M
         %%
         out.discrepancy = discrepancy;
         out.ritzes = ritzes;
@@ -334,11 +366,11 @@ assert(all( ~isnan(meanL2norm) ), "Problems: L2 norm computation failed");
 
 switch(options.sortby)
     case 'initcond'
-    [out.rank,idx] = sort( abs(b), 'descend' );
+    [out.ranking,idx] = sort( abs(b), 'descend' );
     case 'l2'
-    [out.rank,idx] = sort( meanL2norm, 'descend' );
+    [out.ranking,idx] = sort( meanL2norm, 'descend' );
     case 'residual'
-    [out.rank,idx] = sort( optimalResiduals, 'ascend' );
+    [out.ranking,idx] = sort( optimalResiduals, 'ascend' );
     otherwise
         error('Unknown sorting option')
 end
