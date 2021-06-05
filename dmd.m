@@ -97,25 +97,25 @@ function out = dmd( DataMatrix, dt, rom_dim, varargin )
 
 p = inputParser;
 
-p.addRequired('DataMatrix',@(M)validateattributes(M, 'numeric',{'2d','real','finite'})  );
-p.addRequired('dt',@(s)validateattributes(s, 'numeric',{'scalar','positive','finite'}) );
-p.addRequired('rom_dim', @(s)validateattributes(s, 'numeric',{'scalar','positive','finite','integer'}));
+p.addRequired('DataMatrix',@(M)validateattributes(M, {'numeric'},{'2d','real','finite'})  );
+p.addRequired('dt',@(s)validateattributes(s, {'numeric'},{'scalar','positive','finite'}) );
+p.addRequired('rom_dim', @(s)validateattributes(s, {'numeric'},{'scalar','positive','finite','integer'}));
 
 p.addParameter('rom_type', 'lsq', @(x)assert(ismember(x,{'lsq','tlsq'}),'Input not recognized: %s',x) );
 p.addParameter('dmd_type', 'exact', @(x)assert(ismember(x,{'exact','rrr'}),'Input not recognized: %s',x) );
 
-p.addParameter('removefrequencies', [], @(s)validateattributes(s,  'numeric',{'row'}));
+p.addParameter('removefrequencies', [], @(s)validateattributes(s,  {'numeric'},{'row'}));
 p.addParameter('sortby', 'residual', @(x)assert(ismember(x,{'initcond','l2','residual'}),'Input not recognized: %s',x) );
 
-p.addParameter('step',1,@(s)validateattributes(s, 'numeric', {'row','integer','finite'}) );
-p.addParameter('normalize',true,@(s)validateattributes(s, 'numeric', {'scalar','logical'}) );
+p.addParameter('step',1,@(s)validateattributes(s, {'numeric'}, {'row','integer','finite'}) );
+p.addParameter('normalize',true,@(s)validateattributes(s, {'numeric'}, {'scalar','logical'}) );
 
-p.addParameter('ritzMaxIteration',1,@(s)validateattributes(s, 'numeric', {'scalar','integer','nonnegative'}) );
+p.addParameter('ritzMaxIteration',1,@(s)validateattributes(s, {'numeric'}, {'scalar','integer','nonnegative'}) );
 
-p.addParameter('ritzATOL',1e-4,@(s)validateattributes(s, 'numeric', {'scalar','nonnegative'}) );
-p.addParameter('ritzRTOL',1e-2,@(s)validateattributes(s, 'numeric', {'scalar','nonnegative'}) );
+p.addParameter('ritzATOL',1e-4,@(s)validateattributes(s, {'numeric'}, {'scalar','nonnegative'}) );
+p.addParameter('ritzRTOL',1e-2,@(s)validateattributes(s, {'numeric'}, {'scalar','nonnegative'}) );
 
-p.addParameter('numericalRankTolerance',0.0,@(s)validateattributes(s, 'numeric', {'scalar','nonnegative','finite'}) );
+p.addParameter('numericalRankTolerance',0.0,@(s)validateattributes(s, {'numeric'}, {'scalar','nonnegative','finite'}) );
 
 p.addParameter('svdcode', 'QR', @(x)assert(ismember(x,{'QR','DD'}),'Input not recognized: %s',x) );
 

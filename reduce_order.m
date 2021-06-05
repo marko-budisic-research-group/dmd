@@ -30,12 +30,12 @@ function [ROM,out] = reduce_order( Phi, omega, b, t, varargin )
 
 p = inputParser;
 
-p.addRequired('Phi',@(M)validateattributes(M, 'numeric',{'2d','finite'})  );
+p.addRequired('Phi',@(M)validateattributes(M, {'numeric'},{'2d','finite'})  );
 
-p.addRequired('omega',@(s)validateattributes(s, 'numeric', {'column','finite'}) );
-p.addRequired('b',@(s)validateattributes(s, 'numeric', {'column','finite'}) );
-p.addRequired('t',@(s)validateattributes(s, 'numeric', {'row','real','finite'}) );
-p.addOptional('idx',true(size(b)),@(s)validateattributes(s, 'numeric', {} ));
+p.addRequired('omega',@(s)validateattributes(s, {'numeric'}, {'column','finite'}) );
+p.addRequired('b',@(s)validateattributes(s, {'numeric'}, {'column','finite'}) );
+p.addRequired('t',@(s)validateattributes(s, {'numeric'}, {'row','real','finite'}) );
+p.addOptional('idx',true(size(b)),@(s)validateattributes(s, {'numeric'}, {} ));
 
 parse(p,Phi, omega, b, t, varargin{:});
 options = p.Results;
