@@ -29,7 +29,7 @@ function out = dmd( DataMatrix, dt, rom_dim, varargin )
 %    out = dmd( DataMatrix, dt, rom_dim, 'svdcode', VALUE)
 %         VALUE = 'QR' - use QR-SVD from Lapack for SVD algorithm {default}
 %                      - requires (automatic) mex compilation on first run
-%         VALUE = 'DD' - use DD-SVD from MATLAB for SVD algorithm 
+%         VALUE = 'DD' - use DD-SVD from MATLAB for SVD algorithm
 %
 %    out = dmd( DataMatrix, dt, rom_dim, 'normalize', VALUE)
 %         VALUE = true - normalize snapshot matrices by column L2 norms,
@@ -80,7 +80,7 @@ function out = dmd( DataMatrix, dt, rom_dim, varargin )
 % out.lambda - discrete time DMD eigenvalue lambda = exp( omega * dt )
 % out.model_rank - rank of the model (= input r parameter)
 % out.optimalResiduals - residual after adjustment (if DDMD-RRR was used)
-% 
+%
 
 p = inputParser;
 
@@ -95,7 +95,7 @@ p.addParameter('removefrequencies', [], @(s)validateattributes(s,  {'numeric'},{
 p.addParameter('sortby', 'residual', @(x)assert(ismember(x,{'initcond','l2','residual'}),'Input not recognized: %s',x) );
 
 p.addParameter('step',1,@(s)validateattributes(s, {'numeric'}, {'row','integer','finite'}) );
-p.addParameter('normalize',true,@(s)validateattributes(s, {'numeric'}, {'scalar','logical'}) );
+p.addParameter('normalize',true,@(s)validateattributes(s, {'logical'}, {'scalar'}))
 
 p.addParameter('ritzMaxIteration',1,@(s)validateattributes(s, {'numeric'}, {'scalar','integer','nonnegative'}) );
 
@@ -186,6 +186,7 @@ switch(options.rom_type)
         Qr = Q(:,1:rom_dim);
         X1 = X1*Qr;
         X2 = X2*Qr;
+        clear Z Qr Q;
     case 'lsq'
         disp("Standard least-squares truncation to order " + rom_dim)
 end
@@ -262,8 +263,7 @@ switch(options.dmd_type)
         ritzes = ritz;
         Mleft = [R12; R22];
         Mright = [R11; zeros(size(R22))];
-        
-        
+
         while not( allclose(ritzOld, ritz, options.ritzATOL, options.ritzRTOL) ) && ...
                 count < options.ritzMaxIteration
             count = count+1;
@@ -277,7 +277,6 @@ switch(options.dmd_type)
                 % compute smallest singular value
                 [~,SS,VV] = mysvd( M );
                 optimalResiduals(i) = SS(end,end);
-
                 svec_min = VV(:,end);
                 ritz(i) = svec_min' * Sk * svec_min;
                 W(:,i) = svec_min;
