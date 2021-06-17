@@ -44,6 +44,14 @@ function out = dmd( DataMatrix, dt, rom_dim, varargin )
 %         VALUE is the threshold for ratios sigma_n/sigma_1 of singular values
 %               used to determine the numerical rank/"significance" of the POD subspace
 %
+%    out = dmd( DataMatrix, dt, rom_dim, 'excludepairs', VALUE)
+%         VALUE is either a logical index vector or the list of numerical
+%               index of snapshot pairs that will be excluded in DMD
+%               calculation.  This option allows including (where VALUE=false)
+%               or dropping (where VALUE=true, or an integer) pairs of snapshots in X1 and
+%               X2 matrices, without the user needing to modify the input
+%               matrix, which can be useful, e.g., for leave-one-out testing of variance.
+%
 %    out = dmd( DataMatrix, dt, rom_dim, 'ritzMaxIteration', IT, ...
 %                 'ritzATOL', ATOL, 'ritzRTOL', RTOL )
 %
@@ -70,8 +78,6 @@ function out = dmd( DataMatrix, dt, rom_dim, varargin )
 %                 as DMD modes, so they can be used in the same manner.
 %
 %
-%
-%
 % Outputs:
 % out.meanL2norm - time-average of L2 norm of mode
 % out.b - contribution of the mode to 0th timestep
@@ -79,7 +85,7 @@ function out = dmd( DataMatrix, dt, rom_dim, varargin )
 % out.omega - continuous time DMD eigenvalue omega = log( lambda ) / dt
 % out.lambda - discrete time DMD eigenvalue lambda = exp( omega * dt )
 % out.model_rank - rank of the model (= input r parameter)
-% out.optimalResiduals - residual after adjustment (if DDMD-RRR was used)
+% out.optimalResiduals - residual after adjustment (if DDMD-RRR was NOT used, it will be populated by NaN)
 %
 
 p = inputParser;
@@ -96,6 +102,8 @@ p.addParameter('sortby', 'residual', @(x)assert(ismember(x,{'initcond','l2','res
 
 p.addParameter('step',1,@(s)validateattributes(s, {'numeric'}, {'row','integer','finite'}) );
 p.addParameter('normalize',true,@(s)validateattributes(s, {'logical'}, {'scalar'}))
+
+p.addParameter('excludepairs',[],@(s)validateattributes(s, {'logical','numeric'}, {'row', 'finite'}))
 
 p.addParameter('ritzMaxIteration',1,@(s)validateattributes(s, {'numeric'}, {'scalar','integer','nonnegative'}) );
 
@@ -131,6 +139,7 @@ X1=DataMatrix(:,1:end-1); % likely a very slow part of the code
 X2=DataMatrix(:,2:end);
 
 
+%% Mean/frequency removal
 if ~isempty(options.removefrequencies)
     disp('Removing predetermined frequencies')
 
@@ -174,6 +183,12 @@ if ~isempty(options.removefrequencies)
     clear PI_o;
     clear PI;
 
+end
+
+%% Subselect pairs
+if ~isempty(options.excludepairs)
+    X1(:,options.excludepairs) = [];
+    X2(:,options.excludepairs) = [];
 end
 
 % pre-normalization
