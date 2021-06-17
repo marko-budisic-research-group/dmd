@@ -29,7 +29,7 @@ function out = dmd( DataMatrix, dt, rom_dim, varargin )
 %    out = dmd( DataMatrix, dt, rom_dim, 'svdcode', VALUE)
 %         VALUE = 'QR' - use QR-SVD from Lapack for SVD algorithm {default}
 %                      - requires (automatic) mex compilation on first run
-%         VALUE = 'DD' - use DD-SVD from MATLAB for SVD algorithm 
+%         VALUE = 'DD' - use DD-SVD from MATLAB for SVD algorithm
 %
 %    out = dmd( DataMatrix, dt, rom_dim, 'normalize', VALUE)
 %         VALUE = true - normalize snapshot matrices by column L2 norms,
@@ -80,7 +80,7 @@ function out = dmd( DataMatrix, dt, rom_dim, varargin )
 % out.lambda - discrete time DMD eigenvalue lambda = exp( omega * dt )
 % out.model_rank - rank of the model (= input r parameter)
 % out.optimalResiduals - residual after adjustment (if DDMD-RRR was used)
-% 
+%
 
 p = inputParser;
 
@@ -153,6 +153,7 @@ if ~isempty(options.removefrequencies)
     X1 = X1 - X1*PI_o;
     X2 = X2 - X2*PI_o;
 
+
     % the following two calculations are in-principle equivalent, but not
     % exactly when number of time steps is finite
     HarmonicAverage = DataMatrix*pinv(transpose(Vandermonde));
@@ -169,6 +170,9 @@ if ~isempty(options.removefrequencies)
     meanL2(isnan(meanL2)) = abs(out.AvgB(isnan(meanL2)));
 
     out.AvgMeanL2norm = meanL2;
+
+    clear PI_o;
+    clear PI;
 
 end
 
@@ -187,6 +191,7 @@ switch(options.rom_type)
         Qr = Q(:,1:rom_dim);
         X1 = X1*Qr;
         X2 = X2*Qr;
+        clear Z Qr;
     case 'lsq'
         disp("Standard least-squares truncation to order " + rom_dim)
 end
@@ -203,10 +208,10 @@ Ur = U(:, 1:subspaceSize);
 Vr = V(:,1:subspaceSize);
 Sigmar = Sigma(1:subspaceSize, 1:subspaceSize);
 
+clear U V Sigma;
+clear X1;
 
 %%
-
-clear X1;
 
 switch(options.dmd_type)
     case 'exact'
@@ -263,8 +268,8 @@ switch(options.dmd_type)
         ritzes = ritz;
         Mleft = [R12; R22];
         Mright = [R11; zeros(size(R22))];
-        
-        
+
+
         while not( allclose(ritzOld, ritz, options.ritzATOL, options.ritzRTOL) ) && ...
                 count < options.ritzMaxIteration
             count = count+1;
