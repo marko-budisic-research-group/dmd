@@ -326,6 +326,8 @@ out.omega = omega;
 out.lambda = lambda;
 out.model_rank = length(lambda);
 out.sigma = sigma;
+out.subspaceSize = subspaceSize;
+out.numericalRankTolerance = options.numericalRankTolerance;
 
 %% compute combination coefficients
 % by L2-fit to a sequence of snapshots
